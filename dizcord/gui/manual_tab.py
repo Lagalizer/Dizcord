@@ -4,14 +4,23 @@ Moving to another chapter - with Next / Previous or by clicking the list - cuts 
 old chapter, shows the new chapter and starts reading it. The narrator is silent whenever the tab is not visible."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QLabel, QListWidget, QPushButton, QSlider, QTextBrowser,
                                QVBoxLayout, QWidget)
 
 from .. import config
 from ..manual import CHAPTERS, speakable
+from ..natural import NaturalNarrator
 from ..sapi import Narrator
 from .widgets import DataCombo
+
+_NATURAL = "edge:"          # voice ids in the combo: "edge:<neural voice>" (online) or "sapi:<Windows voice>" (offline)
+_WINDOWS = "sapi:"
+
+
+class _Bridge(QObject):
+    """Lets the voice threads report a problem to the window thread."""
+    failed = Signal(str)
 
 
 class ManualTabMixin:
@@ -20,7 +29,11 @@ class ManualTabMixin:
     # ------------------------------------------------------------------ build
     def _build_manual_tab(self) -> QWidget:
         saved = self.state.get("manual") or {}
-        self._narrator: Narrator | None = None            # created the first time it is needed (loads COM)
+        self._narrator: Narrator | None = None            # Windows voice: created the first time it is needed (loads COM)
+        self._windows_items: list[tuple[str, str]] = []
+        self._bridge = _Bridge()
+        self._bridge.failed.connect(self._manual_natural_failed)
+        self._natural = NaturalNarrator(on_error=self._bridge.failed.emit)
         self._manual_index = 0
         w = QWidget()
         root = QHBoxLayout(w)
@@ -54,8 +67,8 @@ class ManualTabMixin:
         self.manual_speak.setChecked(bool(saved.get("speak", True)))
         again = QPushButton("🔁 Read again")
         stop = QPushButton("⏹ Stop")
-        self.manual_voice = DataCombo([])
-        self.manual_voice.setMinimumWidth(260)
+        self.manual_voice = DataCombo(self._manual_items())
+        self.manual_voice.setMinimumWidth(300)
         self.manual_speed = QSlider(Qt.Horizontal)
         self.manual_speed.setRange(-6, 6)
         self.manual_speed.setValue(int(saved.get("rate", 0)))
@@ -84,43 +97,83 @@ class ManualTabMixin:
         self.manual_speak.toggled.connect(self._manual_speak_toggled)
         self.manual_voice.changed.connect(self._manual_voice_changed)
         self.manual_speed.valueChanged.connect(self._manual_speed_changed)
-        self._manual_saved_voice = saved.get("voice")
+        pick = saved.get("voice") or ""
+        if pick and not pick.startswith((_NATURAL, _WINDOWS)):      # saved by an older version: a Windows voice name
+            pick = _WINDOWS + pick
+        if not pick and self._natural.available:
+            pick = _NATURAL + self._natural.voices()[0][0]              # natural voice by default
+        self._manual_saved_voice = pick
+        self.manual_voice.blockSignals(True)
+        self.manual_voice.setValue(pick)
+        self.manual_voice.blockSignals(False)
         self.manual_tab_widget = w
         self._manual_show(0)
         return w
 
     # ------------------------------------------------------------------ narrator
+    def _manual_items(self) -> list[tuple[str, str]]:
+        """Voices in the list: natural ones first (online), then the voices built into Windows (offline)."""
+        items = []
+        if self._natural.available:
+            items += [(_NATURAL + vid, f"★ Natural - {label}  (needs internet)") for vid, label in self._natural.voices()]
+        return items + self._windows_items
+
+    def _manual_current_voice(self) -> str:
+        return self.manual_voice.value() or self._manual_saved_voice or ""
+
     def _manual_narrator(self) -> Narrator:
+        """The Windows voice (offline). Created on first use; its voices are added to the list."""
         if self._narrator is None:
             n = Narrator()
             if n.available:
                 voices = n.voices()
-                self.manual_voice.blockSignals(True)
-                self.manual_voice.set_items([(name, name) for _i, name, _l in voices])
+                self._windows_items = [(_WINDOWS + name, f"Windows - {name}  (offline)") for _i, name, _l in voices]
+                self.manual_voice.set_items(self._manual_items())
                 names = [name for _i, name, _l in voices]
-                pick = self._manual_saved_voice if self._manual_saved_voice in names else \
+                wanted = self._manual_current_voice()
+                pick = wanted[len(_WINDOWS):] if wanted.startswith(_WINDOWS) and wanted[len(_WINDOWS):] in names else \
                     (names[n.default_voice()] if names else "")
                 if pick:
-                    self.manual_voice.setValue(pick)
                     n.set_voice(names.index(pick))
-                self.manual_voice.blockSignals(False)
+                    if wanted.startswith(_WINDOWS) or not wanted:
+                        self.manual_voice.blockSignals(True)
+                        self.manual_voice.setValue(_WINDOWS + pick)
+                        self.manual_voice.blockSignals(False)
                 n.set_rate(self.manual_speed.value())
                 if not n.has_english_voice():
                     self.manual_note.setText("No English voice is installed - the manual is in English. Add one in "
                                              "Windows Settings → Time & language → Speech.")
-            else:
-                self.manual_note.setText("The Windows voice is not available on this PC - the manual is shown as "
-                                         "text only.")
+            elif not self._natural.available:
+                self.manual_note.setText("No voice is available on this PC - the manual is shown as text only.")
                 self.manual_speak.setEnabled(False)
             self._narrator = n
         return self._narrator
 
     def _manual_read(self):
         """Read the chapter on screen from its beginning (the previous reading is cut first)."""
+        text = speakable(CHAPTERS[self._manual_index].body)
+        voice = self._manual_current_voice()
+        if voice.startswith(_NATURAL) and self._natural.available:
+            self.manual_note.setText("")
+            self._manual_stop()
+            self._natural.speak(text, voice[len(_NATURAL):], self.manual_speed.value() * 8)
+        else:
+            self._manual_read_windows(text)
+
+    def _manual_read_windows(self, text: str):
         n = self._manual_narrator()
-        n.speak(speakable(CHAPTERS[self._manual_index].body))
+        self._manual_stop()
+        n.speak(text)
+
+    def _manual_natural_failed(self, _msg: str):
+        """The natural voice could not be reached (no internet): read with the offline Windows voice instead."""
+        if not self.manual_speak.isChecked() or not self._manual_tab_visible():
+            return
+        self.manual_note.setText("The natural voice needs internet - reading with the Windows voice instead.")
+        self._manual_read_windows(speakable(CHAPTERS[self._manual_index].body))
 
     def _manual_stop(self):
+        self._natural.stop()
         if self._narrator is not None:
             self._narrator.stop()
 
@@ -156,13 +209,14 @@ class ManualTabMixin:
         self._manual_save()
 
     def _manual_voice_changed(self):
-        n = self._manual_narrator()
-        names = [v[1] for v in n.voices()]
-        name = self.manual_voice.value()
-        if name in names:
-            n.set_voice(names.index(name))
-            if self.manual_speak.isChecked() and self._manual_tab_visible():
-                self._manual_read()
+        voice = self.manual_voice.value() or ""
+        if voice.startswith(_WINDOWS):
+            n = self._manual_narrator()
+            names = [v[1] for v in n.voices()]
+            if voice[len(_WINDOWS):] in names:
+                n.set_voice(names.index(voice[len(_WINDOWS):]))
+        if voice and self.manual_speak.isChecked() and self._manual_tab_visible():
+            self._manual_read()
         self._manual_save()
 
     def _manual_speed_changed(self, v: int):
@@ -183,6 +237,7 @@ class ManualTabMixin:
         if getattr(self, "manual_tab_widget", None) is None:
             return
         if self._manual_tab_visible():
+            self._manual_narrator()                  # makes the offline Windows voices appear in the list
             if self.manual_speak.isChecked():
                 self._manual_read()
         else:
