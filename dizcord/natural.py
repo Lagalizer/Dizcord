@@ -39,14 +39,18 @@ EDGE_VOICES = [
     ("en-GB-RyanNeural", "Ryan - UK, male"),
     ("en-AU-NatashaNeural", "Natasha - Australia, female"),
 ]
-_CHUNK = 280                       # characters per request: short enough to start fast, long enough to sound natural
+_CHUNK = 280                       # characters per request: long enough to sound natural
+_SECOND = 140                      # the second is medium, so synthesis always stays ahead of playback
+_FIRST = 60                    # the first piece is short, so the voice starts speaking sooner
 
 
 def _chunks(text: str) -> list[str]:
+    """Sentences grouped into pieces; the first piece is kept short so the first words come out fast."""
     sentences = re.split(r"(?<=[.!?:])\s+", text.strip())
     out, cur = [], ""
     for s in sentences:
-        if cur and len(cur) + len(s) + 1 > _CHUNK:
+        limit = (_FIRST, _SECOND)[len(out)] if len(out) < 2 else _CHUNK         # pieces grow: 60, 140, then 280
+        if cur and len(cur) + len(s) + 1 > limit:
             out.append(cur)
             cur = s
         else:
@@ -66,6 +70,7 @@ def _can_import(name: str) -> bool:
 
 class NaturalNarrator:
     _piper_loaded: dict = {}
+    _load_lock = threading.Lock()
 
     def __init__(self, on_error=None):
         self.on_error = on_error
@@ -91,6 +96,18 @@ class NaturalNarrator:
             lang, name, quality = (f.stem.split("-") + ["", ""])[:3]
             out.append((f.stem, f"{name.replace('_', ' ').title()} - {lang.replace('_', ' ')}, {quality}"))
         return out
+
+    def warm_up(self, voice: str) -> None:
+        """Load the offline voice in the background (and run it once) so the first reading starts at once."""
+        if not voice.startswith(PIPER) or not self.piper_ok:
+            return
+
+        def work():
+            try:
+                self._piper_synth(voice[len(PIPER):], 0)("Ready.")
+            except Exception as e:  # noqa: BLE001
+                log.info("could not warm up the offline voice: %s", e)
+        threading.Thread(target=work, daemon=True).start()
 
     # ------------------------------------------------------------------ speaking
     def speak(self, text: str, voice: str, rate: int = 0) -> None:
@@ -140,9 +157,10 @@ class NaturalNarrator:
     def _piper_synth(self, voice: str, rate: int):
         from piper import PiperVoice
         path = PIPER_DIR / f"{voice}.onnx"
-        pv = NaturalNarrator._piper_loaded.get(str(path))
-        if pv is None:
-            pv = NaturalNarrator._piper_loaded[str(path)] = PiperVoice.load(str(path))
+        with NaturalNarrator._load_lock:                  # the warm-up thread and a reading never load it twice
+            pv = NaturalNarrator._piper_loaded.get(str(path))
+            if pv is None:
+                pv = NaturalNarrator._piper_loaded[str(path)] = PiperVoice.load(str(path))
         length_scale = max(0.5, min(2.0, 0.95 / (1 + rate / 100.0)))     # slider +x% = x% faster
 
         def synth(t):

@@ -109,6 +109,7 @@ class ManualTabMixin:
         self.manual_voice.blockSignals(True)
         self.manual_voice.setValue(pick)
         self.manual_voice.blockSignals(False)
+        self._natural.warm_up(self._manual_current_voice())      # load the offline voice now, while the app starts
         self.manual_tab_widget = w
         self._manual_show(0)
         return w
@@ -224,6 +225,7 @@ class ManualTabMixin:
 
     def _manual_voice_changed(self):
         voice = self.manual_voice.value() or ""
+        self._natural.warm_up(voice)
         if voice.startswith(_WINDOWS):
             n = self._manual_narrator()
             names = [v[1] for v in n.voices()]
