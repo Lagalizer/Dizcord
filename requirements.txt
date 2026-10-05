@@ -10,7 +10,8 @@ edge-tts>=7.0
 anthropic>=0.60
 langdetect>=1.0.9
 keyboard>=0.13
-comtypes>=1.2; sys_platform == "win32"      # Windows speech for the Manual tab
+comtypes>=1.2; sys_platform == "win32"      # Windows speech for the Manual tab (last-resort voice)
+piper-tts>=1.3                              # offline natural voice for the Manual tab (voice file: models\piper)
 faster-whisper>=1.1
 # Text translation (Discord chat reader, select-to-translate, screen OCR)
 uiautomation>=2.0; sys_platform == "win32"

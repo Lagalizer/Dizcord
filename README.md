@@ -15,8 +15,9 @@ speak in theirs. Runs on your own Windows PC - free engines included, no account
   engines (OpenAI, Groq, DeepL, ElevenLabs...) or fully offline ones (Whisper, Ollama, Piper).
 - **Portable.** Everything lives in the app folder. Nothing is installed in Windows.
 - **Built-in manual, read aloud.** The *Manual* tab explains every feature chapter by chapter and reads it to you
-  with a natural neural voice (free, no key, needs internet) - or, with no internet, the voices built into Windows
-  (offline, no AI). Next / Previous cut the old chapter and read the new one.
+  with a natural voice that runs fully offline on your PC (Piper, downloaded into the app folder by `setup.bat`, no
+  internet or key needed afterwards). You can also pick the online Edge neural voices, or the Windows voices as a
+  last resort. Next / Previous cut the old chapter and read the new one.
 - **Updates in one click.** *Settings → Updates → Check for updates* downloads the newest release; your settings,
   keys and models are kept.
 

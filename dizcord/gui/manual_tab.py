@@ -10,17 +10,18 @@ from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QLabel, QListWidget, QPus
 
 from .. import config
 from ..manual import CHAPTERS, speakable
-from ..natural import NaturalNarrator
+from ..natural import EDGE as _NATURAL, PIPER as _PIPER, NaturalNarrator
 from ..sapi import Narrator
 from .widgets import DataCombo
 
-_NATURAL = "edge:"          # voice ids in the combo: "edge:<neural voice>" (online) or "sapi:<Windows voice>" (offline)
+# voice ids in the combo: "piper:<voice>" (natural, offline), "edge:<voice>" (natural, online),
+# "sapi:<Windows voice>" (robotic, offline)
 _WINDOWS = "sapi:"
 
 
 class _Bridge(QObject):
-    """Lets the voice threads report a problem to the window thread."""
-    failed = Signal(str)
+    """Lets the voice threads report a problem to the window thread: (engine, message)."""
+    failed = Signal(str, str)
 
 
 class ManualTabMixin:
@@ -100,8 +101,10 @@ class ManualTabMixin:
         pick = saved.get("voice") or ""
         if pick and not pick.startswith((_NATURAL, _WINDOWS)):      # saved by an older version: a Windows voice name
             pick = _WINDOWS + pick
-        if not pick and self._natural.available:
-            pick = _NATURAL + self._natural.voices()[0][0]              # natural voice by default
+        if not pick and self._natural.piper_ok:
+            pick = _PIPER + self._natural.piper_voices()[0][0]          # offline natural voice: works from the first run
+        elif not pick and self._natural.edge_ok:
+            pick = _NATURAL + self._natural.edge_voices()[0][0]
         self._manual_saved_voice = pick
         self.manual_voice.blockSignals(True)
         self.manual_voice.setValue(pick)
@@ -114,8 +117,11 @@ class ManualTabMixin:
     def _manual_items(self) -> list[tuple[str, str]]:
         """Voices in the list: natural ones first (online), then the voices built into Windows (offline)."""
         items = []
-        if self._natural.available:
-            items += [(_NATURAL + vid, f"★ Natural - {label}  (needs internet)") for vid, label in self._natural.voices()]
+        if self._natural.piper_ok:
+            items += [(_PIPER + vid, f"★ Natural - {label}  (offline)") for vid, label in self._natural.piper_voices()]
+        if self._natural.edge_ok:
+            items += [(_NATURAL + vid, f"★ Natural - {label}  (needs internet)")
+                      for vid, label in self._natural.edge_voices()]
         return items + self._windows_items
 
     def _manual_current_voice(self) -> str:
@@ -153,10 +159,12 @@ class ManualTabMixin:
         """Read the chapter on screen from its beginning (the previous reading is cut first)."""
         text = speakable(CHAPTERS[self._manual_index].body)
         voice = self._manual_current_voice()
-        if voice.startswith(_NATURAL) and self._natural.available:
+        online = voice.startswith(_NATURAL) and self._natural.edge_ok
+        offline = voice.startswith(_PIPER) and self._natural.piper_ok
+        if online or offline:
             self.manual_note.setText("")
             self._manual_stop()
-            self._natural.speak(text, voice[len(_NATURAL):], self.manual_speed.value() * 8)
+            self._natural.speak(text, voice, self.manual_speed.value() * 8)
         else:
             self._manual_read_windows(text)
 
@@ -165,12 +173,18 @@ class ManualTabMixin:
         self._manual_stop()
         n.speak(text)
 
-    def _manual_natural_failed(self, _msg: str):
-        """The natural voice could not be reached (no internet): read with the offline Windows voice instead."""
+    def _manual_natural_failed(self, engine: str, _msg: str):
+        """A natural voice failed. The online one (no internet) falls back to the offline natural voice if it is
+        installed, and any natural voice falls back to the robotic Windows voice as the last resort."""
         if not self.manual_speak.isChecked() or not self._manual_tab_visible():
             return
-        self.manual_note.setText("The natural voice needs internet - reading with the Windows voice instead.")
-        self._manual_read_windows(speakable(CHAPTERS[self._manual_index].body))
+        text = speakable(CHAPTERS[self._manual_index].body)
+        if engine == _NATURAL and self._natural.piper_ok:
+            self.manual_note.setText("The online voice needs internet - reading with the offline natural voice instead.")
+            self._natural.speak(text, _PIPER + self._natural.piper_voices()[0][0], self.manual_speed.value() * 8)
+            return
+        self.manual_note.setText("The natural voice is not available - reading with the Windows voice instead.")
+        self._manual_read_windows(text)
 
     def _manual_stop(self):
         self._natural.stop()

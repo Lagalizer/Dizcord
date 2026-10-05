@@ -5,7 +5,7 @@ if not exist "%~dp0runtime\python.exe" call "%~dp0setup.bat"
 :menu
 echo.
 echo  Optional extras (installed into this folder):
-echo    1) Piper        - fast offline voices (then put voices in models\piper)
+echo    1) Piper        - reinstall the offline voice engine (installed by setup; more voices go in models\piper)
 echo    2) Kokoro       - high quality offline voices (needs model files in models\kokoro)
 echo    3) Argos        - offline translation (large download)
 echo    4) NVIDIA GPU   - CUDA libraries for faster Whisper on NVIDIA cards (~1 GB)

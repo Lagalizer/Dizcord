@@ -1,4 +1,4 @@
-# Builds / repairs the portable runtime inside the app folder:
+﻿# Builds / repairs the portable runtime inside the app folder:
 #   runtime\          private Python (embeddable distribution) + all packages
 # Nothing is installed system-wide and no admin rights are needed.
 param(
@@ -17,6 +17,7 @@ $Tmp = Join-Path $Rt "_tmp"
 New-Item -ItemType Directory -Force $Tmp | Out-Null
 $env:TEMP = $Tmp; $env:TMP = $Tmp
 $env:PIP_DISABLE_PIP_VERSION_CHECK = "1"
+$env:PIP_CACHE_DIR = Join-Path $Tmp "pip-cache"        # keep pip's download cache inside the app folder too (deleted at the end)
 $env:PYTHONNOUSERSITE = "1"
 
 function Step($msg) { Write-Host ""; Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -51,6 +52,25 @@ if ($Packages.Count -gt 0) {
     & $Py -m pip install --no-warn-script-location -r (Join-Path $Root $Requirements)
 }
 if ($LASTEXITCODE -ne 0) { throw "Package installation failed (see messages above)" }
+
+# Offline natural voice for the Manual (Piper, ~60 MB). Saved inside the app folder (models\piper), once.
+if ($Packages.Count -eq 0) {
+    $PiperDir = Join-Path $Root "models\piper"
+    $Voice = "en_US-kristin-medium"
+    if (-not (Test-Path (Join-Path $PiperDir "$Voice.onnx.json"))) {
+        Step "Downloading the offline voice for the Manual (~60 MB, once)"
+        try {
+            New-Item -ItemType Directory -Force $PiperDir | Out-Null
+            $base = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/$Voice"
+            Invoke-WebRequest -Uri "$base.onnx" -OutFile (Join-Path $PiperDir "$Voice.onnx") -UseBasicParsing
+            Invoke-WebRequest -Uri "$base.onnx.json" -OutFile (Join-Path $PiperDir "$Voice.onnx.json") -UseBasicParsing
+        } catch {
+            # not fatal: the Manual falls back to the online / Windows voice. Run setup.bat again to retry.
+            Remove-Item (Join-Path $PiperDir "$Voice.onnx*") -ErrorAction SilentlyContinue
+            Write-Host "Could not download the offline voice ($($_.Exception.Message)). Run setup.bat again later." -ForegroundColor Yellow
+        }
+    }
+}
 
 Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
 Step "Done. Start the app with Dizcord.bat"
