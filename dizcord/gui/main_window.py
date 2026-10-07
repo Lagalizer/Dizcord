@@ -18,17 +18,18 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QDoubleSpinBox, QFileDia
 
 from .. import APP_NAME, __version__, config
 from .. import languages as L
+from ..i18n import no_translate
 from ..audio import devices
 from ..engine import Engine
 from ..providers import REGISTRY
 from . import theme
 from ..edition import PUBLIC
-from .bots_tab import BotsTabMixin
 from .manual_tab import ManualTabMixin
 from .dashboard import DashboardMixin
 from .settings_tab import SettingsTabMixin
 from .overlay import SubtitleOverlay
 from .text_tab import TextTabMixin
+from .tour import TourMixin
 from .widgets import (DataCombo, DeviceCombo, LangCombo, LevelMeter, ProviderPanel, VolumeSlider, change_signal,
                       run_async, set_widget_value, widget_value)
 
@@ -83,7 +84,7 @@ def hint(text: str) -> QLabel:
 STAGES = {None: "idle", "stt": "recognizing…", "translate": "translating…", "tts": "speaking…"}
 
 
-class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin, TextTabMixin, QMainWindow):
+class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin, TourMixin, QMainWindow):
     def __init__(self, app: QApplication):
         super().__init__()
         self.app = app
@@ -123,7 +124,6 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         avail = app.primaryScreen().availableGeometry()
         self.resize(min(1360, avail.width() - 40), min(900, avail.height() - 40))
         self._init_text()
-        self._init_bot()
         self._build_ui()
         self.apply_appearance(on_top_changed=bool(self.appearance["always_on_top"]))
         self.load_profile_into_ui()
@@ -144,9 +144,10 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         if self.state.get("overlay_visible"):
             self.overlay.show()
         if not self.state.get("seen_setup"):
-            self.tabs.setCurrentWidget(self.setup_tab)
+            if not self.state.get("tour_pending"):         # a fresh install gets the guided tour instead
+                self.tabs.setCurrentWidget(self.setup_tab)
             self.state["seen_setup"] = True
-        self._bot_autostart()
+        self._init_tour()
 
     # ======================================================================= UI
     def _build_ui(self):
@@ -159,8 +160,6 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         self.tabs.addTab(scroll(self._build_dashboard_tab()), "Dashboard")
         self.tabs.addTab(self._build_live_tab(), "Live")
         self.tabs.addTab(scroll(self._build_text_tab()), "Text")
-        if not PUBLIC:                       # the public edition has no bot at all
-            self.tabs.addTab(scroll(self._build_bots_tab()), "Bots")
         self.tabs.addTab(scroll(self._build_input_tab()), "Input")
         self.tabs.addTab(scroll(self._build_output_tab()), "Output")
         self.tabs.addTab(scroll(self._build_stt_tab()), "Speech")
@@ -225,12 +224,6 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         self.chat_btn.setToolTip("Translate Discord text messages (see the Text tab)")
         self.chat_btn.toggled.connect(lambda _on: self.toggle_chat())
         bar.addWidget(self.chat_btn)
-        if not PUBLIC:
-            self.bot_top_btn = QPushButton("🤖 Bot")
-            self.bot_top_btn.setCheckable(True)
-            self.bot_top_btn.setToolTip("Start / stop your Discord bot (see the Bots tab)")
-            self.bot_top_btn.clicked.connect(lambda _on: self.toggle_bot())
-            bar.addWidget(self.bot_top_btn)
         self.start_btn = QPushButton("▶  Start")
         self.start_btn.setObjectName("primary")
         self.start_btn.setToolTip("Start / stop the voice translator for voice calls (F5)")
@@ -476,7 +469,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         h = QHBoxLayout(box)
         b = QPushButton("🎤 Record 4 s from my mic and transcribe")
         b.clicked.connect(self.test_stt)
-        self.stt_result = QLabel()
+        self.stt_result = no_translate(QLabel())
         self.stt_result.setWordWrap(True)
         h.addWidget(b)
         h.addWidget(self.stt_result, 1)
@@ -515,7 +508,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         self.tr_test_lang.setValue(self.profile["incoming"]["target_lang"])
         b = QPushButton("Translate")
         b.clicked.connect(self.test_translation)
-        self.tr_test_out = QLabel()
+        self.tr_test_out = no_translate(QLabel())
         self.tr_test_out.setWordWrap(True)
         self.tr_test_out.setTextInteractionFlags(Qt.TextSelectableByMouse)
         g.addWidget(self.tr_test_in, 0, 0)
@@ -551,7 +544,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         row = QHBoxLayout()
         b = QPushButton("Test AI model")
         b.clicked.connect(self.test_ai)
-        self.ai_result = QLabel()
+        self.ai_result = no_translate(QLabel())
         self.ai_result.setWordWrap(True)
         row.addWidget(b)
         row.addWidget(self.ai_result, 1)
@@ -573,38 +566,62 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         v.addWidget(box)
         box = QGroupBox("Voices")
         g = QGridLayout(box)
-        self.gender = self.bind(DataCombo([("female", "Female"), ("male", "Male")]), "tts.gender")
-        g.addWidget(QLabel("Auto voice gender"), 0, 0)
-        g.addWidget(self.gender, 0, 1)
         self.voice_in = DataCombo()
         self.voice_out = DataCombo()
         for cb in (self.voice_in, self.voice_out):
             cb.setEditable(True)
             cb.setInsertPolicy(DataCombo.NoInsert)
+            cb.setMinimumWidth(260)
             cb.currentTextChanged.connect(self._on_voice_changed)
-        g.addWidget(QLabel("Voice for translations I hear"), 1, 0)
-        g.addWidget(self.voice_in, 1, 1)
-        g.addWidget(QLabel("My voice in Discord"), 2, 0)
-        g.addWidget(self.voice_out, 2, 1)
-        lb = QPushButton("Load voice list")
+        for col, head in enumerate(("", "Voice", "Speed", "Pitch", "Volume", "")):
+            if head:
+                lb = QLabel(head)
+                lb.setObjectName("muted")
+                g.addWidget(lb, 0, col)
+        for row, (d, label, cb) in enumerate((("incoming", "Translations I hear", self.voice_in),
+                                              ("outgoing", "My voice in Discord", self.voice_out)), 1):
+            g.addWidget(QLabel(label), row, 0)
+            g.addWidget(cb, row, 1)
+            speed = self.bind(VolumeSlider(2.0, minimum=0.5), f"{d}.voice_speed")
+            speed.setToolTip("Speed of this voice (100% = normal). Works with every voice engine.")
+            g.addWidget(speed, row, 2)
+            pitch = QDoubleSpinBox()
+            pitch.setRange(-12, 12)
+            pitch.setSingleStep(1)
+            pitch.setDecimals(0)
+            pitch.setToolTip("Pitch in semitones: lower (-) or higher (+). 0 = the voice as it is.")
+            g.addWidget(self.bind(pitch, f"{d}.voice_pitch"), row, 3)
+            vol = self.bind(VolumeSlider(), f"{d}.volume")
+            vol.setToolTip("Volume of this voice (the same setting as in the Output tab)")
+            g.addWidget(vol, row, 4)
+            test = QPushButton("▶ Test")
+            test.setToolTip("Say the test sentence with this voice, on your headphones")
+            test.clicked.connect(lambda _=False, d=d: self.test_voice(d))
+            g.addWidget(test, row, 5)
+        g.setColumnStretch(1, 3)
+        g.setColumnStretch(2, 2)
+        g.setColumnStretch(4, 2)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Auto voice gender"))
+        self.gender = self.bind(DataCombo([("female", "Female"), ("male", "Male")]), "tts.gender")
+        row.addWidget(self.gender)
+        lb = QPushButton("⟳ Reload voice list")
         lb.clicked.connect(self.load_voices)
-        g.addWidget(lb, 1, 2)
-        g.addWidget(hint("'auto' picks a natural voice that matches the language automatically."), 2, 2)
+        row.addWidget(lb)
+        row.addStretch(1)
+        g.addLayout(row, 3, 0, 1, 6)
+        g.addWidget(hint("'auto' picks a natural voice that matches the language automatically. The list shows "
+                         "the voices of the languages you translate to."), 4, 0, 1, 6)
         v.addWidget(box)
         box = QGroupBox("Test")
         g = QGridLayout(box)
         self.tts_test_text = QLineEdit("Hi! This is how I will sound in Discord.")
         g.addWidget(self.tts_test_text, 0, 0, 1, 3)
-        b1 = QPushButton("▶ Test 'translations I hear' voice")
-        b1.clicked.connect(lambda: self.test_voice("incoming"))
-        b2 = QPushButton("▶ Test 'my voice' (on my headphones)")
-        b2.clicked.connect(lambda: self.test_voice("outgoing"))
         self.tts_result = QLabel()
         self.tts_result.setObjectName("muted")
-        g.addWidget(b1, 1, 0)
-        g.addWidget(b2, 1, 1)
-        g.addWidget(self.tts_result, 1, 2)
+        g.addWidget(self.tts_result, 1, 0, 1, 3)
         v.addWidget(box)
+        self._voice_list_key = None
         v.addStretch(1)
         self._voices_provider = None
         return w
@@ -618,7 +635,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         box = QGroupBox("API keys")
         g = QGridLayout(box)
         self.key_edits: dict[str, QLineEdit] = {}
-        known = {k: v for k, v in config.KNOWN_KEYS.items() if not (PUBLIC and k == "discord_bot")}
+        known = config.KNOWN_KEYS
         for i, (kid, (label, env)) in enumerate(known.items()):
             e = QLineEdit()
             e.setEchoMode(QLineEdit.Password)
@@ -663,6 +680,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         else:
             lb = QLabel("✖ No virtual audio cable found - install VB-Audio Virtual Cable (free) and restart.")
             lb.setObjectName("warn")
+        self.setup_cable_label = lb
         f.addRow("Virtual cable", lb)
         row = QHBoxLayout()
         b = QPushButton("Use it for my translated voice")
@@ -675,7 +693,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         row.addStretch(1)
         f.addRow(row)
         v.addWidget(box)
-        guide = QTextBrowser()
+        guide = self.setup_guide = QTextBrowser()
         guide.setOpenExternalLinks(True)
         guide.setHtml(SETUP_GUIDE)
         guide.setMinimumHeight(520)
@@ -711,6 +729,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
                     pass
             self._sync_listen_kind()
             set_widget_value(self.listen_device, p["input"]["listen_device"])
+            self._sync_settings_listen()
             self.stt_panel.set_state(p["stt"]["provider"], p["stt"]["settings"])
             self.tr_panel.set_state(p["translation"]["provider"], p["translation"]["settings"])
             self.ai_panel.set_state(p["ai"]["provider"], p["ai"]["settings"])
@@ -753,7 +772,6 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         self.engine.apply_profile(copy.deepcopy(self.profile))
         self.overlay.apply(self.colors, self.profile["ui"])
         self._text_on_change()
-        self._bot_on_change()
         if self.profile["ui"].get("autosave_settings", True):
             self._autosave_timer.start()         # restarts while you keep changing things
         if self.engine.running:
@@ -773,6 +791,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
             cur = self.listen_device.value()
             self.listen_device.refresh(kind)
             self.listen_device.setValue(cur if not self._loading else "")
+        self._sync_settings_listen()
 
     def refresh_devices(self):
         for w in self.findChildren(DeviceCombo):
@@ -896,7 +915,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
 
     def on_event(self, ev: dict):
         self._dash_feed(ev)
-        if self.handle_text_event(ev) or self.handle_bot_event(ev):
+        if self.handle_text_event(ev):
             return
         t = ev.get("type")
         if t == "level":
@@ -1098,7 +1117,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
             out = OutputDevice(dev)
             out.open()
             try:
-                out.play(audio, sr, float(self.profile["incoming"].get("volume", 1.0))).done.wait(len(audio) / sr + 3)
+                out.play(audio, sr, float(self.profile[direction].get("volume", 1.0))).done.wait(len(audio) / sr + 3)
             finally:
                 out.close()
             return secs
@@ -1129,6 +1148,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
     def _on_tts_provider_maybe_changed(self):
         if self.tts_panel.combo.value() != self._voices_provider:
             self._load_voice_combos()
+            self._auto_load_voices()
 
     def _on_voice_changed(self, *_):
         if self._loading:
@@ -1139,6 +1159,16 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
             text = cb.currentText().strip()
             vs[d] = data if data is not None and cb.itemText(cb.currentIndex()) == text else (text or "auto")
         self.on_change()
+
+    def _auto_load_voices(self):
+        """The voice list fills itself when the Voice tab opens (again after the engine or a language changed)."""
+        if not self.tabs.currentWidget() or not self.tabs.currentWidget().isAncestorOf(self.voice_in):
+            return
+        key = (self.tts_panel.combo.value(), self.profile["incoming"]["target_lang"],
+               self.profile["outgoing"]["target_lang"])
+        if key != self._voice_list_key:
+            self._voice_list_key = key
+            self.load_voices()
 
     def load_voices(self):
         self.collect()
@@ -1188,7 +1218,6 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
         self._update_theme_btn()
         self._rerender_transcript()
         self._text_theme_changed()
-        self._bot_theme_changed()
         self.state["theme"] = self.theme_name
 
     def _update_theme_btn(self):
@@ -1201,6 +1230,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
 
     def _on_tab_changed(self, _):
         self._manual_tab_changed()
+        self._auto_load_voices()
         self._load_keys_tab()
         self.overlay_btn.blockSignals(True)
         self.overlay_btn.setChecked(self.overlay.isVisible())
@@ -1221,8 +1251,8 @@ class MainWindow(DashboardMixin, SettingsTabMixin, BotsTabMixin, ManualTabMixin,
             return
         self.engine.shutdown()
         self._text_close()
-        self._bot_close()
         self._manual_close()
+        self._tour_close()
         g = self.geometry()
         og = self.overlay.geometry()
         self.state.update({"geometry": [g.x(), g.y(), g.width(), g.height()],

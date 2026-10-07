@@ -12,9 +12,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QDoubleSpinBox, QFontCom
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox, QVBoxLayout,
                                QWidget)
 
-from .. import APP_NAME, __version__, config
+from .. import APP_NAME, __version__, config, i18n, voice_download
 from ..edition import PUBLIC, UPDATE_REPO
-from .widgets import DataCombo, VolumeSlider, run_async
+from .widgets import DataCombo, DeviceCombo, VolumeSlider, run_async
 
 APPEARANCE_DEFAULTS = {
     "font_pt": 10.0,          # the app's text
@@ -90,6 +90,10 @@ class SettingsTabMixin:
         # ---------------------------------------------------------- app look
         box = QGroupBox("App")
         f = QFormLayout(box)
+        self.set_language = DataCombo([(lang.code, lang.name) for lang in i18n.LANGUAGES])
+        self.set_language.setValue(i18n.current().code)
+        self.set_language.changed.connect(self._language_changed)
+        f.addRow("Language", self.set_language)
         self.set_theme = DataCombo([("dark", "Dark"), ("light", "Light")])
         self.set_theme.setValue(self.theme_name)
         self.set_theme.changed.connect(lambda: self.set_theme.value() != self.theme_name and self.toggle_theme())
@@ -110,6 +114,8 @@ class SettingsTabMixin:
         f.addRow(self.bind(QCheckBox("Save changes automatically (the profile is saved ~1 s after every change)"),
                            "ui.autosave_settings"))
         v.addWidget(box)
+
+        v.addWidget(self._build_devices_box())
 
         # ---------------------------------------------------------- translations look
         box = QGroupBox("Translations")
@@ -184,6 +190,69 @@ class SettingsTabMixin:
         v.addWidget(box)
         v.addStretch(1)
         return w
+
+    # ------------------------------------------------------------------ sound devices (same settings as Input/Output)
+    def _build_devices_box(self):
+        box = QGroupBox("Sound devices")
+        f = QFormLayout(box)
+        self.set_listen_dev = DeviceCombo(self.listen_device.kind)
+        self.set_listen_dev.setToolTip("Loopback: the headphones/speakers Discord plays to (Input tab → Method)")
+        self.set_listen_dev.changed.connect(self._settings_listen_changed)
+        f.addRow("Hear other people from", self.set_listen_dev)
+        self.listen_device.changed.connect(self._sync_settings_listen)
+        f.addRow("My microphone", self.bind(DeviceCombo("input"), "input.mic_device"))
+        f.addRow("Play translations on", self.bind(DeviceCombo("output"), "incoming.output_device"))
+        f.addRow("Send my translated voice to (virtual cable)",
+                 self.bind(DeviceCombo("output"), "outgoing.output_device"))
+        row = QHBoxLayout()
+        b = QPushButton("Refresh device lists")
+        b.clicked.connect(self.refresh_devices)
+        row.addWidget(b)
+        row.addStretch(1)
+        f.addRow(row)
+        f.addRow(_muted("The same settings as in the Input and Output tabs. Device changes apply after Stop → Start."))
+        return box
+
+    def _settings_listen_changed(self):
+        if self._loading:
+            return
+        self.listen_device.blockSignals(True)
+        self.listen_device.setValue(self.set_listen_dev.value())
+        self.listen_device.blockSignals(False)
+        self.on_change()
+
+    def _sync_settings_listen(self, *_):
+        """Keep the Settings copy of 'what the app listens to' equal to the Input tab."""
+        if not hasattr(self, "set_listen_dev"):
+            return
+        self.set_listen_dev.blockSignals(True)
+        if self.set_listen_dev.kind != self.listen_device.kind:
+            self.set_listen_dev.refresh(self.listen_device.kind)
+        self.set_listen_dev.setValue(self.listen_device.value())
+        self.set_listen_dev.blockSignals(False)
+
+    # ------------------------------------------------------------------ language of the app
+    def _language_changed(self):
+        lang = i18n.BY_CODE.get(self.set_language.value())
+        if not lang or lang.code == self.state.get("ui_language"):
+            return
+        self.state["ui_language"] = lang.code
+        try:
+            config.save_app_state(self.state)
+        except Exception:  # noqa: BLE001
+            pass
+
+        def ask_restart(_r=None, err=None):
+            if err:
+                self.setStatus(f"⚠ Could not download the offline voice: {err}", error=True)
+            if QMessageBox.question(self, lang.name, "The new language is used after a restart. Restart Dizcord "
+                                    "now?") == QMessageBox.Yes:
+                self._restart_app()
+        if lang.voice_installed():
+            ask_restart()
+        else:
+            self.setStatus(f"Downloading the offline voice for {lang.name} (about 60 MB)…")
+            run_async(lambda: voice_download.download(lang), ask_restart)
 
     # ------------------------------------------------------------------ updates (public edition)
     def _build_updates_box(self):

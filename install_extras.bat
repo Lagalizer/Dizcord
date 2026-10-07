@@ -1,7 +1,7 @@
 @echo off
 title Dizcord - optional extras
 cd /d "%~dp0"
-if not exist "%~dp0runtime\python.exe" call "%~dp0setup.bat"
+if not exist "%~dp0runtime\.setup-ok" call "%~dp0setup.bat"
 :menu
 echo.
 echo  Optional extras (installed into this folder):

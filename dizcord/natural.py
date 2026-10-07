@@ -1,4 +1,4 @@
-"""Natural voices for the Manual tab.
+"""Natural voices for the guided tour and the Manual tab, in the language of the app.
 
 Two engines, same interface (speak / stop):
   - "piper:<voice>"  Piper neural voices that run on this PC - fully offline, no AI service, no internet. The voice
@@ -8,6 +8,9 @@ Two engines, same interface (speak / stop):
 The text is turned into speech sentence by sentence in a background thread, so the first words start quickly and a
 new call cuts the previous reading at once. If an engine fails, `on_error(kind, message)` is called from the worker
 thread and nothing is played (the caller picks another voice).
+
+prefetch() synthesises the beginning of a text in advance (the next / previous step of the tour), so pressing Next
+starts the voice at once.
 """
 from __future__ import annotations
 
@@ -19,6 +22,8 @@ import threading
 
 import numpy as np
 
+from . import i18n
+from . import languages as L
 from .audio.utils import decode_audio
 from .config import MODELS_DIR
 
@@ -29,7 +34,7 @@ PIPER = "piper:"
 PIPER_DIR = MODELS_DIR / "piper"
 
 # (voice id, label) - a short, curated list of English neural voices of the online engine
-EDGE_VOICES = [
+EDGE_VOICES_EN = [
     ("en-US-AriaNeural", "Aria - US, female"),
     ("en-US-JennyNeural", "Jenny - US, female"),
     ("en-US-AvaNeural", "Ava - US, female"),
@@ -60,6 +65,18 @@ def _chunks(text: str) -> list[str]:
     return out
 
 
+def preload() -> None:
+    """Load the offline voice of the app language now, in this thread. ONNX Runtime holds Python's lock for the
+    few seconds it takes to load a voice, which would freeze the window - so main.py does it at start-up, before the
+    window exists. Afterwards the guide and the Manual start speaking at once (synthesis does not hold the lock)."""
+    n = NaturalNarrator()
+    if n.piper_ok:
+        try:
+            n._piper_synth(n.piper_voices()[0][0], 0)
+        except Exception as e:  # noqa: BLE001
+            log.info("could not preload the offline voice: %s", e)
+
+
 def _can_import(name: str) -> bool:
     try:
         __import__(name)
@@ -71,6 +88,7 @@ def _can_import(name: str) -> bool:
 class NaturalNarrator:
     _piper_loaded: dict = {}
     _load_lock = threading.Lock()
+    _cache: dict = {}                                # (voice, rate, piece) -> (audio, sample rate), see prefetch()
 
     def __init__(self, on_error=None):
         self.on_error = on_error
@@ -83,12 +101,22 @@ class NaturalNarrator:
 
     # ------------------------------------------------------------------ voices
     def edge_voices(self) -> list[tuple[str, str]]:
-        return list(EDGE_VOICES)
+        """Online voices of the app language."""
+        lang = i18n.current()
+        if lang.code == "en":
+            return list(EDGE_VOICES_EN)
+        info = L.LANGUAGES.get(lang.code)
+        voices = [lang.edge] + [v for v in (info[2:4] if info else ()) if v != lang.edge]
+        return [(v, v.split("-")[-1].replace("Neural", "") + f" - {lang.name}") for v in voices]
 
     def piper_voices(self) -> list[tuple[str, str]]:
-        """[(file name without .onnx, label)] of the English Piper voices found in models/piper."""
+        """[(file name without .onnx, label)] of the offline voices of the app language found in models/piper
+        (the one the app downloads first)."""
+        lang = i18n.current()
+        prefix = lang.piper.split("-")[0]
         try:
-            files = sorted(f for f in PIPER_DIR.glob("en_*.onnx") if f.with_name(f.name + ".json").exists())
+            files = sorted((f for f in PIPER_DIR.glob(f"{prefix}-*.onnx") if f.with_name(f.name + ".json").exists()),
+                           key=lambda f: (f.stem != lang.piper, f.stem))
         except OSError:
             return []
         out = []
@@ -107,6 +135,30 @@ class NaturalNarrator:
                 self._piper_synth(voice[len(PIPER):], 0)("Ready.")
             except Exception as e:  # noqa: BLE001
                 log.info("could not warm up the offline voice: %s", e)
+        threading.Thread(target=work, daemon=True).start()
+
+    def refresh(self) -> None:
+        """Look for voices again (after the voice of the app language was downloaded)."""
+        self.piper_ok = _can_import("sounddevice") and _can_import("piper") and bool(self.piper_voices())
+        self.available = self.edge_ok or self.piper_ok
+
+    def prefetch(self, texts: list[str], voice: str, rate: int = 0) -> None:
+        """Synthesise the first piece of each text in the background, so speak() can start it at once."""
+        if not voice.startswith(PIPER) or not self.piper_ok:
+            return                                     # the online voice is fast enough and needs no cache
+
+        def work():
+            try:
+                synth = self._piper_synth(voice[len(PIPER):], rate)
+                for text in texts:
+                    pieces = _chunks(text)
+                    key = (voice, rate, pieces[0]) if pieces else None
+                    if key and key not in self._cache:
+                        self._cache[key] = synth(pieces[0])
+                        while len(self._cache) > 12:
+                            self._cache.pop(next(iter(self._cache)))
+            except Exception as e:  # noqa: BLE001
+                log.info("prefetch failed: %s", e)
         threading.Thread(target=work, daemon=True).start()
 
     # ------------------------------------------------------------------ speaking
@@ -184,7 +236,8 @@ class NaturalNarrator:
             for t in chunks:
                 if not self._alive(gen):
                     return
-                audio, sr = synth(t)
+                cached = self._cache.get((voice, rate, t))
+                audio, sr = cached if cached is not None else synth(t)
                 while self._alive(gen):
                     try:
                         q.put((audio, sr), timeout=0.2)

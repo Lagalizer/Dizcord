@@ -110,7 +110,8 @@ def apply(release: Release) -> UpdateResult:
     new_req = (ROOT / "requirements.txt").read_text(encoding="utf-8") if (ROOT / "requirements.txt").exists() else ""
     if new_req != old_req:
         try:
-            out = subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")],
+            out = subprocess.run([sys.executable, "-m", "pip", "install", "--no-build-isolation",
+                                  "-r", str(ROOT / "requirements.txt")],
                                  capture_output=True, text=True, timeout=900)
             result.packages_updated = out.returncode == 0
             if out.returncode:

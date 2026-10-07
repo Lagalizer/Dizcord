@@ -7,6 +7,7 @@ from PySide6.QtCore import QPoint, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPen, QRegion
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
+from ..i18n import no_translate
 from .. import languages as L
 from . import screens
 
@@ -56,10 +57,10 @@ class TranslationPopup(_Floating):
         lay.setContentsMargins(14, 10, 14, 10)
         lay.setSpacing(4)
         self.meta = QLabel()
-        self.translated = QLabel()
+        self.translated = no_translate(QLabel())
         self.translated.setWordWrap(True)
         self.translated.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.original = QLabel()
+        self.original = no_translate(QLabel())
         self.original.setWordWrap(True)
         self.original.setTextInteractionFlags(Qt.TextSelectableByMouse)
         row = QHBoxLayout()
@@ -124,7 +125,7 @@ class ChatOverlay(_Floating):
         self.font_pt = 10.0        # text size (Settings tab)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 8, 12, 8)
-        self.label = QLabel()
+        self.label = no_translate(QLabel())
         self.label.setWordWrap(True)
         self.label.setTextFormat(Qt.RichText)
         self.label.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -307,7 +308,7 @@ class OcrResultBox(_Floating):
         row.addWidget(self.copy_btn)
         row.addWidget(close)
         lay.addLayout(row)
-        self.body = QLabel()
+        self.body = no_translate(QLabel())
         self.body.setWordWrap(True)
         self.body.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.body.setAlignment(Qt.AlignTop | Qt.AlignLeft)

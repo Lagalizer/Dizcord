@@ -1,9 +1,16 @@
 """The user manual shown (and read aloud) in the Manual tab. Plain Markdown chapters - no tables, so the text
-reads well when it is spoken - plus `speakable()`, which turns a chapter into text a voice can say."""
+reads well when it is spoken - plus `speakable()`, which turns a chapter into text a voice can say.
+
+The English chapters are below. Every other app language has dizcord/locale/<code>.manual.md: the same chapters,
+each one starting with a line "=== <chapter title>". chapters(code) returns them (English if a file is missing)."""
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
+
+LOCALE_DIR = Path(__file__).resolve().parent / "locale"
 
 
 @dataclass(frozen=True)
@@ -28,8 +35,8 @@ Dizcord is a real-time translator for Discord and any other voice chat. It runs 
   Paid cloud engines are optional.
 
 This manual has twelve chapters. Use the Next and Previous buttons, or click a chapter in the list.
-Every time you change chapter, the narrator stops the old one and reads the new one. The voice is the one built
-into Windows. It uses no artificial intelligence, needs no internet and costs nothing.
+Every time you change chapter, the narrator stops the old one and reads the new one. The voice is a natural voice
+in the language of the app that runs on your PC. It needs no internet and costs nothing.
 """),
     Chapter("2. First start", """
 # First start
@@ -37,6 +44,10 @@ into Windows. It uses no artificial intelligence, needs no internet and costs no
 **Step 1. Open the app.** Double-click Dizcord.exe, or Dizcord.bat. The first time, the app builds its own private
 copy of Python inside its folder. This downloads about 750 megabytes, takes a few minutes, and needs no
 administrator rights. Nothing is installed in Windows itself.
+
+Then you choose the language of the app. Everything is shown in that language, and the guide and this manual are
+read aloud in it. The app downloads the voice for that language once, about 60 megabytes. After that, a short
+guided tour shows you the first steps. It only opens this first time; you can replay it from this tab.
 
 **Step 2. Install a virtual audio cable.** Install VB-Audio Virtual Cable, which is free, and restart the PC. This
 is the only thing outside the folder, because Windows needs a driver to create a virtual microphone.
@@ -112,6 +123,8 @@ own translations are playing.
 
 On the **Output** tab you choose where translations play, the virtual cable for your voice, and pass through
 with ducking. Ducking lowers the original voices while a translation is spoken, so you can still hear them.
+
+All the sound devices are also together in one place, in the Settings tab, under Sound devices.
 """),
     Chapter("6. Engines: speech, translation, AI and voice", """
 # Engines
@@ -128,7 +141,8 @@ in your profile.
   your PC, for example with Ollama or LM Studio. You can add extra instructions for slang or names.
 - **Voice tab.** The engine that speaks the translations. The free choice is Microsoft Edge neural voices.
   Piper and Kokoro work offline. ElevenLabs, OpenAI, Azure and Google are paid options. Pick a voice for each
-  direction, or let the app choose a natural voice for each language.
+  direction, or let the app choose a natural voice for each language. For each direction you can also set the
+  speed, the pitch and the volume of the voice. They work with every voice engine.
 
 Every tab has a Test button, so you can check an engine before using it.
 
@@ -197,7 +211,11 @@ can see which engine is slow.
     Chapter("10. Settings and updates", """
 # Settings and updates
 
-The **Settings** tab controls how the app looks: the theme, dark or light, the font, and the text size of the app
+The **Settings** tab sets the language of the app. After you change it, the app restarts in the new language.
+It also has all the sound devices in one place: what the app listens to, your microphone, where translations
+play and where your translated voice goes.
+
+It controls how the app looks: the theme, dark or light, the font, and the text size of the app
 and of the translations shown inside Discord, in the small chat window and in the popups. It also has all the
 hotkeys in one place, a switch to keep the window above other windows, and buttons to reset the window positions
 and open the app, data and log folders.
@@ -238,17 +256,17 @@ you report a problem.
     Chapter("12. About this manual", """
 # About this manual
 
-You are reading the manual built into Dizcord. The narrator is the voice that comes with Windows. It works
-offline, uses no artificial intelligence, and does not send anything anywhere.
+You are reading the manual built into Dizcord. The narrator is a natural voice in the language of the app. It
+runs on your PC, works offline, and does not send anything anywhere.
 
 - **Next and Previous** move between chapters. The narrator stops reading the old chapter and starts the new
   one, and the new text is shown at the same time.
 - **Read aloud** turns the narrator on or off. When it is off, the manual is just text.
 - **Read again** starts the current chapter from the beginning.
 - **Stop** silences the narrator.
-- **Voice** and **Speed** let you change how it sounds. The manual is written in English, so choose an English
-  voice. Windows includes some by default. If you want more voices, add them in Windows Settings, under Time and
-  language, then Speech.
+- **Voice** and **Speed** let you change how it sounds. Besides the offline voice, you can pick an online voice,
+  which needs internet, or one of the voices built into Windows.
+- **Replay the guided tour** shows the first steps again.
 
 The narrator is silent when you leave this tab, and it never starts by itself while you are using the
 translator.
@@ -256,6 +274,24 @@ translator.
 That is the end of the manual. Enjoy Dizcord!
 """),
 ]
+
+
+_cache: dict[str, list[Chapter]] = {}
+
+
+def chapters(code: str) -> list[Chapter]:
+    """The manual in the language `code` (English when there is no translation)."""
+    if code in _cache:
+        return _cache[code]
+    out = CHAPTERS
+    f = LOCALE_DIR / f"{code}.manual.md"
+    if code != "en" and f.is_file():
+        parts = re.split(r"^=== (.+)$", f.read_text(encoding="utf-8"), flags=re.M)
+        found = [Chapter(parts[k].strip(), parts[k + 1]) for k in range(1, len(parts) - 1, 2)]
+        if found:
+            out = found
+    _cache[code] = out
+    return out
 
 
 # --------------------------------------------------------------------------- text for the voice
@@ -289,7 +325,7 @@ def speakable(md: str) -> str:
         if it:
             out.append(it if it[-1] in ".!?:;" else it + ".")
     text = " ".join(out)
-    text = text.replace("Ctrl", "Control").replace("\\", " ")
+    text = text.replace("Ctrl", "Control").replace("Strg", "Steuerung").replace("\\", " ")
     text = _COMBO.sub(" ", text)
-    text = re.sub(r"[^\x20-\x7EÀ-ɏ]", " ", text)      # drop emojis and arrows
+    text = "".join(" " if unicodedata.category(ch)[0] in "SC" else ch for ch in text)   # emojis, arrows (any alphabet stays)
     return re.sub(r"\s+", " ", text).strip()

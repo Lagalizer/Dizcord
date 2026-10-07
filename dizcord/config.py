@@ -44,6 +44,8 @@ def default_profile() -> dict:
             "skip_same_language": True,    # don't re-speak lines already in my language
             "output_device": "",           # where I hear translations ("" = system default)
             "volume": 1.0,
+            "voice_speed": 1.0,            # translated voice: speed (any voice engine)
+            "voice_pitch": 0.0,            # ... and pitch in semitones
             "passthrough": False,          # forward the captured Discord audio to my output device
             "passthrough_volume": 1.0,
             "duck_passthrough": 0.25,      # passthrough volume multiplier while a translation is spoken
@@ -56,6 +58,8 @@ def default_profile() -> dict:
             "speak": True,
             "output_device": "CABLE Input",  # virtual cable that Discord uses as its microphone
             "volume": 1.0,
+            "voice_speed": 1.0,
+            "voice_pitch": 0.0,
             "monitor_device": "",            # optionally hear your own translated voice
             "monitor_volume": 0.5,
             "monitor": False,
@@ -116,24 +120,6 @@ def default_profile() -> dict:
             "draft_send": False,           # press Enter after translating the draft
             "ocr_lang": "auto",
             "clipboard_watch": False,      # translate everything you copy
-        },
-        "bot": {                           # Discord bot (Bots tab) - the token lives in data/keys.json
-            "autostart": False,            # start the bot when Dizcord starts
-            "context_menu": True,          # right-click a message -> Apps -> Translate
-            "public_translate": False,     # also "Translate for everyone" (servers only)
-            "slash_commands": True,        # /translate, /translate-settings, /languages
-            "auto_translate": True,        # /autotranslate channels in servers you manage
-            "flag_reactions": True,        # react with a flag -> translation in that language
-            "webhook_mode": True,          # allow auto-translate "webhook" mode (posts as the author)
-            "include_embeds": True,        # translate embeds and image alt text too
-            "default_lang": "auto",        # auto = each user's Discord language
-            "engine": "",                  # translation engine override ("" = same as the app)
-            "rate_limit": 10,              # translations per user per minute (0 = no limit)
-            "daily_char_limit": 0,         # characters per day (0 = no limit)
-            "test_guild": "",              # server id for instant command sync while testing
-            "cluster_channel": "",         # cloud copies: private channel id where they coordinate (fail-over)
-            "cluster_name": "this-pc",     # this copy's name in that channel
-            "cluster_priority": 9,         # 1 = main; the PC is normally the last backup
         },
         "ui": {
             "subtitle_font_size": 22,
@@ -286,7 +272,6 @@ KNOWN_KEYS = {
     "elevenlabs":    ("ElevenLabs", "ELEVENLABS_API_KEY"),
     "deepgram":      ("Deepgram", "DEEPGRAM_API_KEY"),
     "libretranslate": ("LibreTranslate", "LIBRETRANSLATE_API_KEY"),
-    "discord_bot":   ("Discord bot token (Bots tab)", "DISCORD_BOT_TOKEN"),
 }
 
 

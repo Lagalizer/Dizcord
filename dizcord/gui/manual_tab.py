@@ -1,4 +1,5 @@
-"""'Manual' tab: the user manual, chapter by chapter, read aloud by the voice built into Windows (no AI, offline).
+"""'Manual' tab: the user manual in the app language, chapter by chapter, read aloud by a natural voice in that
+language (offline; an online voice and the Windows voices can be picked too).
 
 Moving to another chapter - with Next / Previous or by clicking the list - cuts the voice that was reading the
 old chapter, shows the new chapter and starts reading it. The narrator is silent whenever the tab is not visible."""
@@ -8,8 +9,8 @@ from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QHBoxLayout, QLabel, QListWidget, QPushButton, QSlider, QTextBrowser,
                                QVBoxLayout, QWidget)
 
-from .. import config
-from ..manual import CHAPTERS, speakable
+from .. import config, i18n
+from ..manual import chapters, speakable
 from ..natural import EDGE as _NATURAL, PIPER as _PIPER, NaturalNarrator
 from ..sapi import Narrator
 from .widgets import DataCombo
@@ -36,14 +37,21 @@ class ManualTabMixin:
         self._bridge.failed.connect(self._manual_natural_failed)
         self._natural = NaturalNarrator(on_error=self._bridge.failed.emit)
         self._manual_index = 0
+        self._chapters = chapters(i18n.current().code)
         w = QWidget()
         root = QHBoxLayout(w)
 
         self.manual_list = QListWidget()
         self.manual_list.setFixedWidth(250)
-        for ch in CHAPTERS:
-            self.manual_list.addItem(ch.title)
-        root.addWidget(self.manual_list)
+        for ch in self._chapters:
+            self.manual_list.addItem(i18n.tr(ch.title))
+        left = QVBoxLayout()
+        left.addWidget(self.manual_list, 1)
+        replay = QPushButton("▶ Replay the guided tour")
+        replay.setToolTip("Show the first steps again, one at a time")
+        replay.clicked.connect(self._manual_replay_tour)
+        left.addWidget(replay)
+        root.addLayout(left)
 
         right = QVBoxLayout()
         self.manual_view = QTextBrowser()
@@ -98,7 +106,8 @@ class ManualTabMixin:
         self.manual_speak.toggled.connect(self._manual_speak_toggled)
         self.manual_voice.changed.connect(self._manual_voice_changed)
         self.manual_speed.valueChanged.connect(self._manual_speed_changed)
-        pick = saved.get("voice") or ""
+        code = i18n.current().code
+        pick = (saved.get("voices") or {}).get(code) or (saved.get("voice") if code == "en" else "") or ""
         if pick and not pick.startswith((_NATURAL, _WINDOWS)):      # saved by an older version: a Windows voice name
             pick = _WINDOWS + pick
         if not pick and self._natural.piper_ok:
@@ -119,9 +128,10 @@ class ManualTabMixin:
         """Voices in the list: natural ones first (online), then the voices built into Windows (offline)."""
         items = []
         if self._natural.piper_ok:
-            items += [(_PIPER + vid, f"★ Natural - {label}  (offline)") for vid, label in self._natural.piper_voices()]
+            items += [(_PIPER + vid, i18n.tr("★ Natural - {0}  (offline)").format(label))
+                      for vid, label in self._natural.piper_voices()]
         if self._natural.edge_ok:
-            items += [(_NATURAL + vid, f"★ Natural - {label}  (needs internet)")
+            items += [(_NATURAL + vid, i18n.tr("★ Natural - {0}  (needs internet)").format(label))
                       for vid, label in self._natural.edge_voices()]
         return items + self._windows_items
 
@@ -134,12 +144,13 @@ class ManualTabMixin:
             n = Narrator()
             if n.available:
                 voices = n.voices()
-                self._windows_items = [(_WINDOWS + name, f"Windows - {name}  (offline)") for _i, name, _l in voices]
+                self._windows_items = [(_WINDOWS + name, i18n.tr("Windows - {0}  (offline)").format(name))
+                                       for _i, name, _l in voices]
                 self.manual_voice.set_items(self._manual_items())
                 names = [name for _i, name, _l in voices]
                 wanted = self._manual_current_voice()
                 pick = wanted[len(_WINDOWS):] if wanted.startswith(_WINDOWS) and wanted[len(_WINDOWS):] in names else \
-                    (names[n.default_voice()] if names else "")
+                    (names[n.default_voice(i18n.current().code)] if names else "")
                 if pick:
                     n.set_voice(names.index(pick))
                     if wanted.startswith(_WINDOWS) or not wanted:
@@ -147,9 +158,9 @@ class ManualTabMixin:
                         self.manual_voice.setValue(_WINDOWS + pick)
                         self.manual_voice.blockSignals(False)
                 n.set_rate(self.manual_speed.value())
-                if not n.has_english_voice():
-                    self.manual_note.setText("No English voice is installed - the manual is in English. Add one in "
-                                             "Windows Settings → Time & language → Speech.")
+                if not self._natural.available and not n.has_voice(i18n.current().code):
+                    self.manual_note.setText("No Windows voice for this language is installed. Add one in Windows "
+                                             "Settings → Time & language → Speech.")
             elif not self._natural.available:
                 self.manual_note.setText("No voice is available on this PC - the manual is shown as text only.")
                 self.manual_speak.setEnabled(False)
@@ -158,7 +169,7 @@ class ManualTabMixin:
 
     def _manual_read(self):
         """Read the chapter on screen from its beginning (the previous reading is cut first)."""
-        text = speakable(CHAPTERS[self._manual_index].body)
+        text = speakable(self._chapters[self._manual_index].body)
         voice = self._manual_current_voice()
         online = voice.startswith(_NATURAL) and self._natural.edge_ok
         offline = voice.startswith(_PIPER) and self._natural.piper_ok
@@ -179,7 +190,7 @@ class ManualTabMixin:
         installed, and any natural voice falls back to the robotic Windows voice as the last resort."""
         if not self.manual_speak.isChecked() or not self._manual_tab_visible():
             return
-        text = speakable(CHAPTERS[self._manual_index].body)
+        text = speakable(self._chapters[self._manual_index].body)
         if engine == _NATURAL and self._natural.piper_ok:
             self.manual_note.setText("The online voice needs internet - reading with the offline natural voice instead.")
             self._natural.speak(text, _PIPER + self._natural.piper_voices()[0][0], self.manual_speed.value() * 8)
@@ -195,17 +206,17 @@ class ManualTabMixin:
     # ------------------------------------------------------------------ navigation
     def _manual_show(self, i: int):
         self._manual_index = i
-        self.manual_view.setMarkdown(CHAPTERS[i].body.strip())
+        self.manual_view.setMarkdown(self._chapters[i].body.strip())
         self.manual_view.verticalScrollBar().setValue(0)
-        self.manual_pos.setText(f"   Chapter {i + 1} of {len(CHAPTERS)}")
+        self.manual_pos.setText(f"   Chapter {i + 1} of {len(self._chapters)}")
         self.manual_prev.setEnabled(i > 0)
-        self.manual_next.setEnabled(i < len(CHAPTERS) - 1)
+        self.manual_next.setEnabled(i < len(self._chapters) - 1)
         self.manual_list.blockSignals(True)
         self.manual_list.setCurrentRow(i)
         self.manual_list.blockSignals(False)
 
     def _manual_goto(self, i: int):
-        i = max(0, min(len(CHAPTERS) - 1, i))
+        i = max(0, min(len(self._chapters) - 1, i))
         changed = i != self._manual_index
         self._manual_stop()                      # the old chapter is cut at once
         self._manual_show(i)                     # the new chapter is shown...
@@ -241,8 +252,10 @@ class ManualTabMixin:
         self._manual_save()
 
     def _manual_save(self):
+        voices = dict((self.state.get("manual") or {}).get("voices") or {})
+        voices[i18n.current().code] = self.manual_voice.value() or self._manual_saved_voice   # one voice per language
         self.state["manual"] = {"speak": self.manual_speak.isChecked(), "rate": self.manual_speed.value(),
-                                "voice": self.manual_voice.value() or self._manual_saved_voice}
+                                "voices": voices}
         try:
             config.save_app_state(self.state)
         except Exception:  # noqa: BLE001
@@ -259,5 +272,11 @@ class ManualTabMixin:
         else:
             self._manual_stop()
 
-    def _manual_close(self):
+    def _manual_replay_tour(self):
         self._manual_stop()
+        if hasattr(self, "start_tour"):
+            self.start_tour()
+
+    def _manual_close(self):
+        if hasattr(self, "_natural"):            # the Manual tab is only built in the public edition
+            self._manual_stop()

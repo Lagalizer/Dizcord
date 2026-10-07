@@ -330,8 +330,11 @@ class Engine(TextEngine):
         audio, sr = tts.synthesize(text, lang, self.voice_for(direction), self.profile["tts"].get("gender", "female"))
         if audio is None or len(audio) == 0:
             raise ProviderError(f"{tts.name}: no audio returned")
+        from .audio import voicefx
         from .audio.utils import trim_silence
-        return trim_silence(np.asarray(audio, dtype=np.float32), sr), sr
+        cfg = self.profile.get(direction, {})
+        audio = trim_silence(np.asarray(audio, dtype=np.float32), sr)
+        return voicefx.apply(audio, sr, cfg.get("voice_speed", 1.0), cfg.get("voice_pitch", 0.0)), sr
 
     def play(self, direction, audio, sr, wait=True):
         cfg = self.profile[direction]

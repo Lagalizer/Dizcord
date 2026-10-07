@@ -1,7 +1,6 @@
 """Text-only part of the engine: translation providers + context, and language detection.
 
-No audio imports, so it also runs on a small Linux server (the cloud bot) - the desktop
-Engine (engine.py) builds on top of it.
+No audio imports, so it also runs without the audio libraries - the desktop Engine (engine.py) builds on top of it.
 """
 from __future__ import annotations
 

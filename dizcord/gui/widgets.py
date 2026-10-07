@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog
                                QVBoxLayout, QWidget)
 
 from .. import languages as L
+from ..i18n import tr
 from ..audio import devices
 from ..providers import REGISTRY, Field, models_info
 
@@ -93,7 +94,7 @@ class DataCombo(QComboBox):
         was_blocked = self.blockSignals(True)
         self.clear()
         for data, label in items:
-            self.addItem(label, data)
+            self.addItem(tr(label), data)
         if cur is not None:
             self.setValue(cur)
         self.blockSignals(was_blocked)
@@ -132,7 +133,7 @@ class DeviceCombo(QComboBox):
         cur = self.value() if self.count() else ""
         was_blocked = self.blockSignals(True)
         self.clear()
-        self.addItem(DEFAULT_DEVICE)
+        self.addItem(tr(DEFAULT_DEVICE))
         try:
             names = devices.input_devices() if self.kind == "input" else devices.output_devices()
         except Exception:
@@ -143,7 +144,7 @@ class DeviceCombo(QComboBox):
 
     def value(self) -> str:
         t = self.currentText().strip()
-        return "" if t == DEFAULT_DEVICE else t
+        return "" if t in (DEFAULT_DEVICE, tr(DEFAULT_DEVICE)) else t
 
     def setValue(self, v: str):
         if not v:
@@ -198,12 +199,12 @@ class ModelCombo(QComboBox):
 class VolumeSlider(QWidget):
     changed = Signal()
 
-    def __init__(self, maximum=2.0, parent=None):
+    def __init__(self, maximum=2.0, parent=None, minimum=0.0):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.slider = QSlider(Qt.Horizontal)
-        self.slider.setRange(0, int(maximum * 100))
+        self.slider.setRange(int(minimum * 100), int(maximum * 100))
         self.label = QLabel("100%")
         self.label.setMinimumWidth(42)
         lay.addWidget(self.slider, 1)
@@ -591,7 +592,8 @@ class ProviderPanel(QWidget):
         self._proc.readyReadStandardOutput.connect(
             lambda: self.log.emit(bytes(self._proc.readAllStandardOutput()).decode(errors="replace").rstrip()))
         self._proc.finished.connect(self._installed)
-        self._proc.start(sys.executable, ["-m", "pip", "install", "--no-warn-script-location", *pkgs])
+        self._proc.start(sys.executable, ["-m", "pip", "install", "--no-warn-script-location",
+                                          "--no-build-isolation", *pkgs])   # isolation can't work: tools/setup.ps1
 
     def _installed(self, code, _status):
         self.install_btn.setEnabled(True)

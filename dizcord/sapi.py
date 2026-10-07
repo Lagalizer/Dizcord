@@ -15,6 +15,17 @@ _RUNNING = 2           # SRSEIsSpeaking
 _ENGLISH = ("409", "809", "c09", "1009", "1409")        # en-US, en-GB, en-AU, en-CA, en-NZ language ids
 
 
+def _lang_code(lcid_hex: str) -> str:
+    """SAPI language id (hex LCID, e.g. "416") -> language code ("pt")."""
+    if lcid_hex in _ENGLISH:
+        return "en"
+    try:
+        import locale
+        return (locale.windows_locale.get(int(lcid_hex, 16)) or "").split("_")[0]
+    except ValueError:
+        return ""
+
+
 class Narrator:
     def __init__(self):
         self._v = None
@@ -45,15 +56,18 @@ class Narrator:
             log.warning("could not list the voices: %s", e)
         return out
 
-    def default_voice(self) -> int:
-        """Index of the first English voice (the manual is in English), else 0."""
+    def default_voice(self, code: str = "en") -> int:
+        """Index of the first voice of the language `code` (the app language), else 0."""
         for i, _name, lang in self.voices():
-            if lang in _ENGLISH:
+            if _lang_code(lang) == code:
                 return i
         return 0
 
+    def has_voice(self, code: str = "en") -> bool:
+        return any(_lang_code(lang) == code for _i, _n, lang in self.voices())
+
     def has_english_voice(self) -> bool:
-        return any(lang in _ENGLISH for _i, _n, lang in self.voices())
+        return self.has_voice("en")
 
     def set_voice(self, index: int) -> None:
         if not self.available:

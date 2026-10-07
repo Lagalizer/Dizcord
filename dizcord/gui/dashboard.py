@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGridLayout, Q
                                QLineEdit, QPushButton, QSizePolicy, QTextBrowser, QVBoxLayout, QWidget)
 
 from .. import languages as L
-from ..edition import PUBLIC
+from ..i18n import source, tr
 from .widgets import DataCombo, LangCombo
 
 MAX_FEED = 40
@@ -81,16 +81,14 @@ def _narrow(combo: QComboBox) -> QComboBox:
 
 
 class DashboardMixin:
-    """Mixed into MainWindow. Needs: bind, profile, engine, chat, botctl, colors, toggle_engine, toggle_chat,
-    toggle_bot, start_ocr, overlay, setStatus."""
+    """Mixed into MainWindow. Needs: bind, profile, engine, chat, colors, toggle_engine, toggle_chat, start_ocr,
+    overlay, setStatus."""
 
     def _build_dashboard_tab(self):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setSpacing(10)
         cards = [self._dash_voice_card(), self._dash_chat_card()]
-        if not PUBLIC:                       # the public edition has no bot at all
-            cards.append(self._dash_bot_card())
         cards += [self._dash_you_card(), self._dash_tools_card(), self._dash_hotkeys_card()]
         for card in cards:
             for combo in card.findChildren(QComboBox):
@@ -167,19 +165,6 @@ class DashboardMixin:
         lay.addStretch(1)
         return box
 
-    def _dash_bot_card(self):
-        box, lay = self._card("🤖  Discord bot")
-        self.dash_bot_status = _Status()
-        lay.addWidget(self.dash_bot_status)
-        self.dash_bot_btn = self._dash_button(self.toggle_bot)
-        lay.addWidget(self.dash_bot_btn)
-        lay.addWidget(self.bind(QCheckBox("Start the bot when Dizcord starts"), "bot.autostart"))
-        self.dash_bot_chars = _muted("")
-        lay.addWidget(self.dash_bot_chars)
-        lay.addWidget(_muted("Right-click a message → Apps → Translate, /translate, and auto-translate "
-                             "channels in your servers. Set it up in the Bots tab."))
-        lay.addStretch(1)
-        return box
 
     def _dash_you_card(self):
         box, lay = self._card("👤  You")
@@ -226,7 +211,7 @@ class DashboardMixin:
     # ------------------------------------------------------------------ live state
     def _dash_set_button(self, b: QPushButton, on: bool, on_text: str, off_text: str):
         text = on_text if on else off_text
-        if b.text() != text:
+        if b.text() != tr(text):
             b.setText(text)
             b.setObjectName("danger" if on else "primary")
             b.style().unpolish(b)
@@ -236,21 +221,18 @@ class DashboardMixin:
         c = self.colors
         # voice
         on = self.engine.running
-        stages = [s.text() for s in (self.in_stage, self.out_stage) if s.text() not in ("idle", "")]
+        stages = [s.text() for s in (self.in_stage, self.out_stage) if source(s) not in ("idle", "")]
         self.dash_voice_status.set(c, "on" if on else "off",
                                    ("Running" + (f" - {', '.join(stages)}" if stages else "")) if on else "Off")
         self._dash_set_button(self.dash_voice_btn, on, "■  Stop voice translator", "▶  Start voice translator")
         # chat
         on = self.chat.reader_running and not self.chat._reader_stop.is_set()
-        txt = self.chat_status.text() if on else "Off"
+        txt = source(self.chat_status) if on else "Off"
         if on and txt.strip().lower() in ("", "off", "chat translation off"):
             txt = "Starting…"
         ok = on and "not found" not in txt and txt != "Starting…"
         self.dash_chat_status.set(c, "on" if ok else ("busy" if on else "off"), txt)
         self._dash_set_button(self.dash_chat_btn, on, "■  Stop chat translation", "▶  Start chat translation")
-        # bot
-        if not PUBLIC:
-            self._dash_refresh_bot(c)
         # tools
         for b in (self.dash_subs_btn, self.overlay_btn):
             b.blockSignals(True)
@@ -258,25 +240,6 @@ class DashboardMixin:
             b.blockSignals(False)
         self._dash_refresh_hotkeys(c)
 
-    def _dash_refresh_bot(self, c):
-        state = getattr(self, "_bot_state", "offline")
-        running = self.botctl.running
-        self.dash_bot_status.set(c, {"online": "on", "connecting": "busy", "standby": "busy",
-                                     "error": "error"}.get(state, "off"),
-                                 self.bot_status.text() if (running or state == "error") else "Offline")
-        self._dash_set_button(self.dash_bot_btn, running, "■  Stop bot", "▶  Start bot")
-        peers = getattr(self, "cloud_peers", [])
-        cloud = ""
-        if peers:
-            active = [p["name"] for p in peers if p["role"] == "active"]
-            backups = sum(1 for p in peers if p["role"] == "standby")
-            cloud = (f"Cloud: 🟢 {active[0]} online, {backups} backup(s) ready · " if active
-                     else "Cloud: 🔴 no copy online · ")
-        self.dash_bot_chars.setText(f"{cloud}Translated today on this PC: {self.botctl.store.chars_today():,} chars")
-        if hasattr(self, "bot_top_btn"):
-            self.bot_top_btn.blockSignals(True)
-            self.bot_top_btn.setChecked(running)
-            self.bot_top_btn.blockSignals(False)
 
     def _dash_refresh_hotkeys(self, c):
         ch, inp = self.profile["chat"], self.profile["input"]
@@ -287,7 +250,7 @@ class DashboardMixin:
                 ("Start / stop voice translator (in the app)", "F5"),
                 ("Push-to-talk (voice, PTT mode)", inp.get("ptt_key"))]
         rows = "".join(f"<tr><td style='padding-right:10px'><b>{html.escape((k or '-').upper())}</b></td>"
-                       f"<td style='color:{c['muted']}'>{html.escape(label)}</td></tr>" for label, k in keys)
+                       f"<td style='color:{c['muted']}'>{html.escape(tr(label))}</td></tr>" for label, k in keys)
         self.dash_hotkeys.setText(f"<table>{rows}</table>")
 
     def _dash_feed(self, ev: dict):
@@ -297,7 +260,7 @@ class DashboardMixin:
             item = {"kind": "💬", "who": ev.get("author") or "?", "src": ev.get("src"), "tgt": ev.get("tgt"),
                     "translated": ev.get("translated", ""), "original": ev.get("original", "")}
         elif t == "line":
-            item = {"kind": "🎧", "who": "Them" if ev.get("dir") == "incoming" else "Me", "src": ev.get("src"),
+            item = {"kind": "🎧", "who": tr("Them") if ev.get("dir") == "incoming" else tr("Me"), "src": ev.get("src"),
                     "tgt": ev.get("tgt"), "translated": ev.get("translated", ""), "original": ev.get("original", "")}
         else:
             return
@@ -314,5 +277,5 @@ class DashboardMixin:
                          f"{html.escape(it['who'])}</b> <span style='color:{c['muted']}; font-size:8.5pt'>{meta}"
                          f"</span><br>{html.escape(it['translated'])}<br><span style='color:{c['muted']}'>"
                          f"{html.escape(it['original'][:300])}</span></div>")
-        self.dash_feed.setHtml("".join(parts) or f"<span style='color:{c['muted']}'>Translations will appear "
-                                                 "here.</span>")
+        self.dash_feed.setHtml("".join(parts) or f"<span style='color:{c['muted']}'>"
+                                                 f"{tr('Translations will appear here.')}</span>")

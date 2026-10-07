@@ -7,6 +7,8 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QLabel, QMenu, QVBoxLayout, QWidget
 
+from ..i18n import no_translate
+
 
 class SubtitleOverlay(QWidget):
     def __init__(self, colors: dict, ui_cfg: dict):

@@ -43,13 +43,22 @@ if (-not (Test-Path (Join-Path $Rt "Lib\site-packages\pip"))) {
     if ($LASTEXITCODE -ne 0) { throw "pip installation failed" }
 }
 
+# The embeddable Python ignores PYTHONPATH (python313._pth), so pip's isolated build environments cannot work:
+# a package published only as source (e.g. langdetect) fails with "Cannot import 'setuptools.build_meta'".
+# Install the build tools into the runtime itself and build without isolation.
+$Ready = Join-Path $Rt ".setup-ok"                       # written last: the launchers re-run setup until it exists
+Remove-Item $Ready -ErrorAction SilentlyContinue
+Step "Installing build tools"
+& $Py -m pip install --no-warn-script-location --upgrade setuptools wheel
+if ($LASTEXITCODE -ne 0) { throw "Build tools installation failed (see messages above)" }
+
 $Packages = @($Packages | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 if ($Packages.Count -gt 0) {
     Step "Installing $($Packages -join ', ')"
-    & $Py -m pip install --no-warn-script-location @Packages
+    & $Py -m pip install --no-warn-script-location --no-build-isolation @Packages
 } else {
     Step "Installing app packages (first time takes a few minutes)"
-    & $Py -m pip install --no-warn-script-location -r (Join-Path $Root $Requirements)
+    & $Py -m pip install --no-warn-script-location --no-build-isolation -r (Join-Path $Root $Requirements)
 }
 if ($LASTEXITCODE -ne 0) { throw "Package installation failed (see messages above)" }
 
@@ -73,4 +82,5 @@ if ($Packages.Count -eq 0) {
 }
 
 Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
+Set-Content -Path $Ready -Encoding ascii -Value "ok"
 Step "Done. Start the app with Dizcord.bat"
