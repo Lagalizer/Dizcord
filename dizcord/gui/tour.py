@@ -79,9 +79,10 @@ def steps(w) -> list[Step]:
              "headphones as the Output Device. Turn off Noise Suppression, Echo Cancellation and Automatic Gain "
              "Control: they can cut the translated voice."),
         Step("What the app listens to",
-             "The app hears the other people by recording what plays on your headphones. Choose the headphones or "
-             "speakers that Discord plays to. The system default is fine if Discord uses your default device.",
-             lambda: w.listen_device),
+             "The app hears only the Discord app, so it never hears its own voice, your game or your music, and it "
+             "keeps listening while it talks. Keep 'Only the Discord app'. You hear only the translations: press F9 "
+             "to also hear the people.",
+             lambda: w.listen_mode),
         Step("Your microphone",
              "Choose the microphone you really speak into. The app translates what you say and speaks it into "
              "Discord for you.",

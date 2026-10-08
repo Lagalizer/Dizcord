@@ -58,9 +58,9 @@ is the only thing outside the folder, because Windows needs a driver to create a
 - Output Device: your headphones.
 - Turn off Noise Suppression, Echo Cancellation and Automatic Gain Control.
 
-**Step 4. Set up the app.** Choose the profile Free, no keys needed. On the Output tab, send your translated
-voice to CABLE Input. On the Input tab, choose the loopback of the headphones that Discord plays to, and your
-real microphone. On the Live tab, choose the languages. Then press Start, or the F5 key.
+**Step 4. Set up the app.** Choose the profile Free, no keys needed. On the Output tab, send your translated voice
+to CABLE Input. On the Input tab, keep the method Only the Discord app, and choose your real microphone. On the
+Live tab, choose the languages. Then press Start, or the F5 key.
 
 The speech model, Whisper small, is about 460 megabytes and downloads the first time you use it.
 """),
@@ -105,24 +105,39 @@ Settings that appear in two places, for example in the Dashboard and in the Text
 
 This is the main feature. It works in two directions, and each one can be switched on separately.
 
-**Incoming: they speak, you hear.** The app listens to the sound that Discord plays to your headphones. It
-recognizes the speech, translates it, shows subtitles, and, if you want, speaks the translation. You choose
-the language they speak, or Auto-detect.
+**Incoming: they speak, you hear.** The app listens only to the Discord app, so it never hears its own voice, your
+game or your music, and it keeps listening while it talks. It recognizes the speech, translates it, shows
+subtitles, and, if you want, speaks the translation. You choose the language they speak, or Auto-detect. Choosing
+the language makes recognition on your PC about twice as fast.
 
-**Outgoing: you speak, they hear.** The app listens to your microphone, translates what you say, and speaks it
-into Discord through the virtual cable. Your own voice is not sent to Discord, only the translation.
+**Outgoing: you speak, they hear.** The app listens to your microphone, translates what you say, and speaks it into
+Discord through the virtual cable. Your own voice is not sent to Discord, only the translation. The app warns you
+if Discord uses your real microphone instead of the cable.
+
+**Hear people, the F9 key.** By default you hear only the translations. While the translator runs, the app turns
+Discord down in the Windows volume mixer, and gives it its volume back when you press Stop. Press F9, or the Hear
+people button, to also hear their own voices. You can change the key on the Input tab.
+
+**One voice, in order.** The translations of the call and the chat messages read aloud share one voice, so they
+never talk over each other. Everything is said in the order it was spoken, and nothing is skipped: the next line is
+prepared while the current one plays, and when lines pile up, the voice speaks a little faster.
+
+**Who is talking.** The app voice can say who talked, for example the first two letters of the name, or the full
+name. Choose it on the Output tab, under The app voice. In calls the names come from the Discord app itself: on the
+Output tab, under Who is talking, add your own Discord application once. Chat messages always have the author's
+name.
 
 On the **Live** tab you set the languages for both directions, watch the level meters and read the transcript.
 You can use a push to talk button, and the Type to speak box, where you type a line, it is translated and spoken
 into Discord. The option Reply in the language they speak makes your output language follow the last language
 detected from the other person.
 
-On the **Input** tab you choose what to listen to and how your microphone starts: voice activity, push to talk,
-or toggle. There is also a sensitivity control and echo protection, which ignores the captured audio while your
-own translations are playing.
+On the **Input** tab you choose what to listen to and how your microphone starts: voice activity, push to talk, or
+toggle. There is also a sensitivity control. The app recognizes its own voice when your microphone hears it, and
+ignores it.
 
-On the **Output** tab you choose where translations play, the virtual cable for your voice, and pass through
-with ducking. Ducking lowers the original voices while a translation is spoken, so you can still hear them.
+On the **Output** tab you choose where translations play, the virtual cable for your voice, the app voice, and who
+is talking.
 
 All the sound devices are also together in one place, in the Settings tab, under Sound devices.
 """),
@@ -175,6 +190,10 @@ next to it. You choose which in the Text tab, under Show translations. It works 
 group chats, threads and forum posts, even with Discord in the background. Messages already in your language,
 and your own messages, are skipped. The translations only show while Discord is the active window, so they never
 cover your game.
+
+**Reading aloud.** Only new messages are read aloud. Messages you scroll back to, edited messages, and old messages
+are translated on screen but never read out. Chat messages share the app voice with the call translations, so the
+two never talk at the same time.
 
 The Text tab has more tools:
 
@@ -235,14 +254,26 @@ offers to restart. The app also checks quietly a few seconds after it starts.
 a test sentence into the virtual cable and runs both directions. If it ends with the word PASS, recognition,
 translation and voice all work.
 
+**Run the call test.** `runtime\\python.exe tools\\calltest.py` plays a pretend voice call into the virtual cable. It
+checks that every sentence is translated in order, that the app never hears its own voice, and that two voices
+never play at once. Run it when you are not in a Discord call.
+
 **Nobody hears my translation.** In Discord, the input device must be CABLE Output. In the app, the Output tab
 must send to CABLE Input. Check that Noise Suppression is off in Discord.
 
-**The app hears nothing.** On the Input tab, check that the loopback device is the one Discord plays to. Look at
-the level meters on the Live tab. If they do not move, the device is wrong.
+**The app hears nothing.** On the Input tab, check the method. With Only the Discord app, Discord must be open.
+With loopback, the device must be the one Discord plays to. Look at the level meters on the Live tab. If they do
+not move, the setting is wrong.
 
-**My own translation is heard twice, or the app translates itself.** Turn on echo protection on the Input tab and
-use headphones.
+**My own translation is heard twice, or the app translates itself.** Use the method Only the Discord app on the
+Input tab, and wear headphones.
+
+**Discord is silent.** This is on purpose while the translator runs: press F9 to hear the people too. If Dizcord
+was closed abruptly, open it once and it gives Discord its volume back, or raise Discord in the Windows volume
+mixer.
+
+**People hear my real voice.** In Discord, the input device must be CABLE Output, not your microphone. The app
+shows a warning when Discord uses your real microphone.
 
 **An engine fails.** Open the Log tab. A message that says forbidden, or blocked, usually means the key or the
 model is not allowed for your account. Try another engine, then test again.

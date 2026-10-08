@@ -38,9 +38,9 @@ mikrofon.
 - Urządzenie wyjściowe: twoje słuchawki.
 - Wyłącz Redukcję szumów, Redukcję echa i Automatyczną regulację wzmocnienia.
 
-**Krok 4. Skonfiguruj aplikację.** Wybierz profil Darmowy, bez kluczy. Na karcie Wyjście wyślij swój przetłumaczony
-głos do CABLE Input. Na karcie Wejście wybierz loopback słuchawek, na których gra Discord, i swój prawdziwy
-mikrofon. Na karcie Na żywo wybierz języki. Potem naciśnij Start albo klawisz F5.
+**Krok 4. Skonfiguruj aplikację.** Wybierz profil Za darmo, bez kluczy. Na karcie Wyjście wysyłaj przetłumaczony
+głos do CABLE Input. Na karcie Wejście zostaw metodę Tylko aplikacja Discord i wybierz swój prawdziwy mikrofon. Na
+karcie Na żywo wybierz języki. Potem naciśnij Start albo klawisz F5.
 
 Model mowy, Whisper small, zajmuje około 460 megabajtów i pobiera się przy pierwszym użyciu.
 
@@ -85,24 +85,39 @@ Ustawienia, które są w dwóch miejscach, na przykład na Pulpicie i na karcie 
 
 To główna funkcja. Działa w dwóch kierunkach i każdy można włączyć osobno.
 
-**Przychodzące: oni mówią, ty słyszysz.** Aplikacja słucha dźwięku, który Discord odtwarza w twoich słuchawkach.
-Rozpoznaje mowę, tłumaczy ją, pokazuje napisy i, jeśli chcesz, wypowiada tłumaczenie. Wybierasz język, którym
-mówią, albo Wykrywaj automatycznie.
+**Przychodzące: oni mówią, ty słyszysz.** Aplikacja słucha tylko aplikacji Discord, więc nigdy nie słyszy własnego
+głosu, twojej gry ani muzyki, i słucha dalej, gdy mówi. Rozpoznaje mowę, tłumaczy ją, pokazuje napisy i, jeśli
+chcesz, wypowiada tłumaczenie. Wybierasz język, którym mówią, albo automatyczne wykrywanie. Wybranie języka
+sprawia, że rozpoznawanie na twoim PC jest mniej więcej dwa razy szybsze.
 
 **Wychodzące: ty mówisz, oni słyszą.** Aplikacja słucha twojego mikrofonu, tłumaczy to, co mówisz, i wypowiada to
-na Discordzie przez wirtualny kabel. Twój własny głos nie trafia na Discorda, tylko tłumaczenie.
+na Discordzie przez wirtualny kabel. Twój własny głos nie trafia na Discorda, tylko tłumaczenie. Aplikacja ostrzeże
+cię, jeśli Discord używa twojego prawdziwego mikrofonu zamiast kabla.
+
+**Słysz ludzi, klawisz F9.** Domyślnie słyszysz tylko tłumaczenia. Gdy tłumacz działa, aplikacja ścisza Discorda w
+mikserze głośności Windows i oddaje mu głośność, gdy naciśniesz Stop. Naciśnij F9 albo przycisk Słysz ludzi, aby
+słyszeć też ich własne głosy. Klawisz możesz zmienić na karcie Wejście.
+
+**Jeden głos, po kolei.** Tłumaczenia z rozmowy i czytane na głos wiadomości z czatu mają jeden głos, więc nigdy
+nie mówią jednocześnie. Wszystko jest mówione w kolejności, w jakiej zostało powiedziane, i nic nie jest pomijane:
+następne zdanie przygotowuje się, gdy gra obecne, a gdy zdania się piętrzą, głos mówi trochę szybciej.
+
+**Kto mówi.** Głos aplikacji może mówić, kto mówił, na przykład pierwsze dwie litery imienia albo pełną nazwę.
+Wybierasz to na karcie Wyjście, w sekcji Głos aplikacji. W rozmowach imiona pochodzą z samej aplikacji Discord: na
+karcie Wyjście, w sekcji Kto mówi, raz dodaj swoją własną aplikację Discord. Wiadomości z czatu zawsze mają nazwę
+autora.
 
 Na karcie **Na żywo** ustawiasz języki obu kierunków, patrzysz na wskaźniki poziomu i czytasz transkrypcję. Możesz
 używać przycisku „naciśnij, aby mówić” i pola Wpisz, aby powiedzieć, w którym wpisujesz zdanie, a ono jest
 tłumaczone i wypowiadane na Discordzie. Opcja Odpowiadaj w języku, którym mówią sprawia, że twój język wyjściowy
 podąża za ostatnim językiem wykrytym u drugiej osoby.
 
-Na karcie **Wejście** wybierasz, czego słuchać i jak włącza się twój mikrofon: aktywacja głosowa, „naciśnij, aby
-mówić” albo przełączanie. Jest tam też regulacja czułości i ochrona przed echem, która ignoruje nagrany dźwięk,
-gdy grają twoje własne tłumaczenia.
+Na karcie **Wejście** wybierasz, czego słuchać i jak startuje twój mikrofon: aktywacja głosowa, naciśnij, aby
+mówić, albo przełączanie. Jest też regulacja czułości. Aplikacja rozpoznaje własny głos, gdy słyszy go twój
+mikrofon, i go ignoruje.
 
-Na karcie **Wyjście** wybierasz, gdzie grają tłumaczenia, wirtualny kabel dla twojego głosu i przekazywanie z
-wyciszaniem. Wyciszanie ścisza oryginalne głosy, gdy wypowiadane jest tłumaczenie, żebyś nadal je słyszał.
+Na karcie **Wyjście** wybierasz, gdzie grają tłumaczenia, wirtualny kabel dla twojego głosu, głos aplikacji i kto
+mówi.
 
 Wszystkie urządzenia dźwiękowe są też zebrane w jednym miejscu, na karcie Ustawienia, w sekcji Urządzenia
 dźwiękowe.
@@ -157,6 +172,10 @@ obok. Wybierasz to na karcie Tekst, w Pokazuj tłumaczenia. Działa na serwerach
 grupach, wątkach i postach na forum, nawet gdy Discord jest w tle. Wiadomości, które już są w twoim języku, i twoje
 własne wiadomości są pomijane. Tłumaczenia widać tylko wtedy, gdy Discord jest aktywnym oknem, więc nigdy nie
 zasłaniają gry.
+
+**Czytanie na głos.** Na głos czytane są tylko nowe wiadomości. Wiadomości, do których przewijasz wstecz, edytowane
+i stare wiadomości są tłumaczone na ekranie, ale nigdy nie są czytane. Wiadomości z czatu dzielą głos aplikacji z
+tłumaczeniami z rozmowy, więc nigdy nie mówią naraz.
 
 Karta Tekst ma więcej narzędzi:
 
@@ -215,14 +234,25 @@ aplikacja proponuje ponowne uruchomienie. Aplikacja sprawdza też po cichu kilka
 Odtwarza zdanie testowe w wirtualnym kablu i sprawdza oba kierunki. Jeśli kończy się słowem PASS, rozpoznawanie,
 tłumaczenie i głos działają.
 
+**Uruchom test rozmowy.** `runtime\python.exe tools\calltest.py` odtwarza udawaną rozmowę głosową do wirtualnego
+kabla. Sprawdza, czy każde zdanie jest tłumaczone po kolei, czy aplikacja nigdy nie słyszy własnego głosu i czy
+nigdy nie grają dwa głosy naraz. Uruchamiaj go, gdy nie jesteś w rozmowie na Discordzie.
+
 **Nikt nie słyszy mojego tłumaczenia.** Na Discordzie urządzeniem wejściowym musi być CABLE Output. W aplikacji
 karta Wyjście musi wysyłać do CABLE Input. Sprawdź, czy Redukcja szumów na Discordzie jest wyłączona.
 
-**Aplikacja nic nie słyszy.** Na karcie Wejście sprawdź, czy urządzenie loopback to to, na którym gra Discord.
-Spójrz na wskaźniki poziomu na karcie Na żywo. Jeśli się nie ruszają, urządzenie jest złe.
+**Aplikacja nic nie słyszy.** Na karcie Wejście sprawdź metodę. Przy Tylko aplikacja Discord Discord musi być
+otwarty. Przy loopback urządzenie musi być tym, na którym gra Discord. Spójrz na wskaźniki poziomu na karcie Na
+żywo. Jeśli się nie ruszają, ustawienie jest złe.
 
-**Moje tłumaczenie słychać dwa razy albo aplikacja tłumaczy samą siebie.** Włącz ochronę przed echem na karcie
-Wejście i używaj słuchawek.
+**Moje tłumaczenie słychać dwa razy albo aplikacja tłumaczy samą siebie.** Użyj metody Tylko aplikacja Discord na
+karcie Wejście i używaj słuchawek.
+
+**Discord jest cicho.** Tak ma być, gdy tłumacz działa: naciśnij F9, aby słyszeć też ludzi. Jeśli Dizcord zamknął
+się nagle, otwórz go raz, a odda Discordowi głośność, albo podgłośnij Discorda w mikserze głośności Windows.
+
+**Ludzie słyszą mój prawdziwy głos.** W Discordzie urządzeniem wejściowym musi być CABLE Output, a nie twój
+mikrofon. Aplikacja pokazuje ostrzeżenie, gdy Discord używa twojego prawdziwego mikrofonu.
 
 **Silnik nie działa.** Otwórz kartę Log. Komunikat ze słowem forbidden albo blocked zwykle oznacza, że klucz lub
 model nie jest dozwolony dla twojego konta. Spróbuj innego silnika i przetestuj ponownie.

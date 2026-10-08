@@ -20,11 +20,13 @@ log = logging.getLogger("dizcord.player")
 
 
 class _Clip:
-    __slots__ = ("data", "pos", "volume", "tag", "done")
+    __slots__ = ("data", "pos", "volume", "tag", "done", "growing", "kind")
 
-    def __init__(self, data, volume, tag):
+    def __init__(self, data, volume, tag, growing=False, kind=""):
         self.data, self.pos, self.volume, self.tag = data, 0, volume, tag
         self.done = threading.Event()
+        self.growing = growing        # streamed: more audio is still coming (plays silence if it runs dry)
+        self.kind = kind              # what is speaking ("voice" / "chat"), for the speech queue
 
 
 class OutputDevice:
@@ -83,6 +85,25 @@ class OutputDevice:
             self.clips.append(clip)
         return clip
 
+    def play_stream(self, volume: float = 1.0, tag: str = "", kind: str = "") -> _Clip:
+        """A clip that starts empty and grows with append() (audio already at self.samplerate) until finish()."""
+        clip = _Clip(np.zeros(0, dtype=np.float32), volume, tag, growing=True, kind=kind)
+        with self.lock:
+            self.clips.append(clip)
+        return clip
+
+    def append(self, clip: _Clip, data: np.ndarray):
+        with self.lock:
+            if clip.growing:
+                clip.data = np.concatenate([clip.data[clip.pos:], data.astype(np.float32, copy=False)])
+                clip.pos = 0
+
+    def finish(self, clip: _Clip):
+        with self.lock:
+            clip.growing = False
+            if clip not in self.clips:
+                clip.done.set()
+
     def push_live(self, chunk: np.ndarray, sr: int, volume: float = 1.0):
         rs = self._live_resamplers.get(sr)
         if rs is None:
@@ -108,7 +129,9 @@ class OutputDevice:
     def fade_out(self, clip: _Clip, ms: int = 40):
         """Stop one clip quickly with a short fade (no click); its done event fires when the fade ends."""
         with self.lock:
+            clip.growing = False
             if clip not in self.clips:
+                clip.done.set()
                 return
             n = int(self.samplerate * ms / 1000)
             tail = clip.data[clip.pos:clip.pos + n].copy()
@@ -140,7 +163,7 @@ class OutputDevice:
                 if n > 0:
                     mix[:n] += c.data[c.pos:c.pos + n] * c.volume
                     c.pos += n
-                if c.pos >= len(c.data):
+                if c.pos >= len(c.data) and not c.growing:
                     finished.append(c)
             for c in finished:
                 self.clips.remove(c)

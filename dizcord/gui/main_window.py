@@ -22,6 +22,7 @@ from ..i18n import no_translate
 from ..audio import devices
 from ..engine import Engine
 from ..providers import REGISTRY
+from ..speech import NAME_STYLES
 from . import theme
 from ..edition import PUBLIC
 from .manual_tab import ManualTabMixin
@@ -274,9 +275,16 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
             stop = QPushButton("Stop speaking")
             stop.setToolTip("Cut the translation that is playing now")
             stop.clicked.connect(self.engine.stop_speaking)
+            self.hear_btn = QPushButton("👂 Hear people")
+            self.hear_btn.setCheckable(True)
+            self.hear_btn.setChecked(self.engine.hear_originals)
+            self.hear_btn.setToolTip("Also hear the people in the call (their own voices), not only the "
+                                     "translations. Global hotkey: Input tab (default F9).")
+            self.hear_btn.toggled.connect(self._on_hear_toggled)
             r2 = QHBoxLayout()
             r2.addWidget(pause)
             r2.addWidget(stop)
+            r2.addWidget(self.hear_btn)
             r2.addStretch(1)
             g.addLayout(r2, 4, 0, 1, 3)
         else:
@@ -359,7 +367,8 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         box = QGroupBox("What the app listens to (other people in Discord)")
         f = QFormLayout(box)
         self.listen_mode = self.bind(DataCombo([
-            ("loopback", "Capture what plays on an output device (loopback) - easiest"),
+            ("app", "Only the Discord app (recommended) - never hears the app's own voice, games or music"),
+            ("loopback", "Capture what plays on an output device (loopback)"),
             ("device", "Capture an input/recording device (CABLE-B Output, Voicemeeter Out…)"),
         ]), "input.listen_mode")
         self.listen_mode.changed.connect(self._sync_listen_kind)
@@ -367,15 +376,20 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         self.listen_device = DeviceCombo("output")
         self.listen_device.changed.connect(self.on_change)
         f.addRow("Device", self.listen_device)
-        f.addRow(hint("Loopback: choose the headphones/speakers Discord plays to. Tip: set Discord's output to a "
-                      "separate device (e.g. a second virtual cable) and enable <i>Pass-through</i> in the Output "
-                      "tab - then game sounds and music won't be translated."))
+        f.addRow(hint("<b>Only the Discord app</b> needs Windows 10 (2004) or 11: the app keeps listening while it "
+                      "talks, and you can turn the original voices off (Hear people). Loopback: choose the "
+                      "headphones/speakers Discord plays to."))
         lg = QDoubleSpinBox()
         lg.setRange(-20, 30)
         lg.setSuffix(" dB")
         f.addRow("Input boost", self.bind(lg, "input.listen_gain_db"))
-        f.addRow(self.bind(QCheckBox("Pause listening while a translation plays on that device (prevents echo loops)"),
-                           "input.pause_listen_while_speaking"))
+        f.addRow(self.bind(QCheckBox("Loopback: pause listening while a translation plays on that device "
+                                     "(prevents echo loops)"), "input.pause_listen_while_speaking"))
+        hk = self.bind(QLineEdit(), "input.hear_key")
+        hk.setPlaceholderText("e.g. f9, ctrl+alt+h - empty = off")
+        f.addRow("Hotkey: hear the people on / off", hk)
+        f.addRow(self.bind(QCheckBox("Hear the people in the call when Dizcord starts (not only the translations)"),
+                           "incoming.hear_originals"))
         v.addWidget(box)
 
         box = QGroupBox("Your microphone")
@@ -394,8 +408,8 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         mg.setRange(-20, 30)
         mg.setSuffix(" dB")
         f.addRow("Mic boost", self.bind(mg, "input.mic_gain_db"))
-        f.addRow(self.bind(QCheckBox("Ignore my mic while translations play (if you don't use headphones)"),
-                           "input.ignore_mic_while_playing"))
+        f.addRow(self.bind(QCheckBox("Ignore my mic while translations play (only without headphones - it cuts "
+                                     "you off while the app talks)"), "input.ignore_mic_while_playing"))
         v.addWidget(box)
 
         row = QHBoxLayout()
@@ -424,6 +438,19 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         f.addRow("Pass-through volume", self.bind(VolumeSlider(), "incoming.passthrough_volume"))
         f.addRow("Original voices while translating", self.bind(VolumeSlider(1.0), "incoming.duck_passthrough"))
         v.addWidget(box)
+
+        box = QGroupBox("The app voice")
+        f = QFormLayout(box)
+        f.addRow("Say who is talking", self.bind(DataCombo(NAME_STYLES), "speech.names"))
+        f.addRow(self.bind(QCheckBox("Say the name again when the same person goes on talking"),
+                           "speech.repeat_names"))
+        f.addRow(self.bind(QCheckBox("Speak a little faster when translations pile up (stays close to live)"),
+                           "speech.catchup"))
+        f.addRow(hint("Call translations and chat messages read aloud share one voice: never two at the same "
+                      "time, in the order they were said. Chat messages use the author's name; in calls the name "
+                      "comes from <i>Who is talking</i> below."))
+        v.addWidget(box)
+        v.addWidget(self._build_speakers_box())
 
         box = QGroupBox("Your translated voice  →  Discord")
         f = QFormLayout(box)
@@ -663,6 +690,8 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         for kid, e in self.key_edits.items():
             self.keys.set(kid, e.text())
         self.keys.save()
+        if hasattr(self, "rpc_secret"):
+            self.rpc_secret.setText(self.keys.stored("discord_rpc_secret"))
         self.ai_panel.keys_changed()
         self._log("API keys saved.")
         self.setStatus("API keys saved.")
@@ -776,7 +805,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
             self._autosave_timer.start()         # restarts while you keep changing things
         if self.engine.running:
             restart_keys = [("input", k) for k in ("listen_mode", "listen_device", "mic_device", "mic_mode",
-                                                   "ptt_key")]
+                                                   "ptt_key", "hear_key", "listen_app")]
             restart_keys += [("incoming", "enabled"), ("outgoing", "enabled"), ("incoming", "passthrough")]
             if any(before[a].get(b) != self.profile[a].get(b) for a, b in restart_keys):
                 self.restart_hint.show()
@@ -786,11 +815,13 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         self.setWindowTitle(f"{APP_NAME} {__version__} — {self.profile['name']}{star}")
 
     def _sync_listen_kind(self):
-        kind = "output" if self.listen_mode.value() == "loopback" else "input"
+        mode = self.listen_mode.value()
+        kind = "input" if mode == "device" else "output"
         if self.listen_device.kind != kind:
             cur = self.listen_device.value()
             self.listen_device.refresh(kind)
             self.listen_device.setValue(cur if not self._loading else "")
+        self.listen_device.setEnabled(mode != "app")          # Discord only: whatever device Discord plays on
         self._sync_settings_listen()
 
     def refresh_devices(self):
@@ -948,6 +979,13 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
                 self.restart_hint.hide()
         elif t == "their_lang":
             self.their_label.setText(f"They speak: {L.name(ev['lang'])}")
+        elif t == "hear":
+            self._show_hear(ev["on"])
+        elif t == "rpc_status":
+            self.rpc_status.setText(("✔ " if ev.get("ok") else "⚠ ") + ev["text"])
+            self.rpc_status.setObjectName("ok" if ev.get("ok") else "warn")
+            self.rpc_status.style().unpolish(self.rpc_status)
+            self.rpc_status.style().polish(self.rpc_status)
         elif t == "ptt":
             self.ptt_btn.setText("🔴 Recording…" if ev["down"] else "🎤 Hold to talk")
         elif t == "log":
@@ -964,7 +1002,8 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         c = self.colors
         inc = ln["dir"] == "incoming"
         col = c["incoming"] if inc else c["outgoing"]
-        who = "Them" if inc else ("Me (typed)" if ln.get("typed") else "Me")
+        who = html.escape(ln["who"]) if inc and ln.get("who") else (
+            "Them" if inc else ("Me (typed)" if ln.get("typed") else "Me"))
         src = L.name(ln["src"]) if ln.get("src") else "?"
         meta = f"{ln['time']} · {src} → {L.name(ln['tgt'])}"
         if ln.get("skipped"):
@@ -984,7 +1023,8 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         ui = self.profile["ui"]
         if (ev["dir"] == "incoming" and self.profile["incoming"].get("show_subtitles", True)) or \
                 (ev["dir"] == "outgoing" and ui.get("subtitle_show_mine", True)):
-            self.overlay.add(ev["dir"], ev["translated"], ev["original"])
+            name = f"{ev['who']}: " if ev.get("who") else ""
+            self.overlay.add(ev["dir"], name + ev["translated"], ev["original"])
         if ui.get("autosave_transcript", True):
             self._autosave(ln)
 
@@ -1001,7 +1041,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
             if self.transcript_file is None:
                 stamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 self.transcript_file = config.TRANSCRIPTS_DIR / f"session_{stamp}.txt"
-            who = "THEM" if ln["dir"] == "incoming" else "ME"
+            who = (ln.get("who") or "THEM") if ln["dir"] == "incoming" else "ME"
             with open(self.transcript_file, "a", encoding="utf-8") as fh:
                 fh.write(f"[{ln['time']}] {who} ({ln.get('src') or '?'}→{ln['tgt']}): {ln['translated']}\n")
                 if ln["original"] != ln["translated"]:
@@ -1020,7 +1060,7 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
             return
         with open(path, "w", encoding="utf-8") as fh:
             for ln in self.lines:
-                who = "THEM" if ln["dir"] == "incoming" else "ME"
+                who = (ln.get("who") or "THEM") if ln["dir"] == "incoming" else "ME"
                 fh.write(f"[{ln['time']}] {who}: {ln['translated']}\n")
                 if ln["original"] != ln["translated"]:
                     fh.write(f"    ({ln['original']})\n")
@@ -1034,6 +1074,48 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
         self.collect()
         self.engine.apply_profile(copy.deepcopy(self.profile))
         self.engine.say(text)
+
+    # ======================================================================= hear people / who is talking
+    def _on_hear_toggled(self, on: bool):
+        if on != self.engine.hear_originals:
+            self.engine.set_hear(on)
+
+    def _show_hear(self, on: bool):
+        for w in (getattr(self, "hear_btn", None), getattr(self, "dash_hear", None)):
+            if w is not None and w.isChecked() != on:
+                w.blockSignals(True)
+                w.setChecked(on)
+                w.blockSignals(False)
+
+    def _build_speakers_box(self):
+        box = QGroupBox("Who is talking (names in voice calls)")
+        f = QFormLayout(box)
+        f.addRow(self.bind(QCheckBox("Get the names of the people talking from the Discord app"),
+                           "speakers.enabled"))
+        cid = self.bind(QLineEdit(), "speakers.client_id")
+        cid.setPlaceholderText("Application ID - a number like 1234567890123456789")
+        f.addRow("Discord Application ID", cid)
+        self.rpc_secret = QLineEdit()
+        self.rpc_secret.setEchoMode(QLineEdit.Password)
+        self.rpc_secret.setPlaceholderText("Client Secret (OAuth2 page) - kept only on this PC")
+        self.rpc_secret.setText(self.keys.stored("discord_rpc_secret"))
+        self.rpc_secret.editingFinished.connect(self._save_rpc_secret)
+        f.addRow("Client Secret", self.rpc_secret)
+        f.addRow(hint("Once: open <a href='https://discord.com/developers/applications'>Discord Developer "
+                      "Portal</a> → New Application → copy the Application ID; OAuth2 → Reset Secret → copy the "
+                      "Client Secret, and add the redirect <code>http://localhost</code>. Then tick the box above "
+                      "and click <b>Authorize</b> in the window Discord shows. Nothing else is shared."))
+        self.rpc_status = QLabel("Off")
+        self.rpc_status.setWordWrap(True)
+        self.rpc_status.setObjectName("muted")
+        f.addRow("Status", self.rpc_status)
+        return box
+
+    def _save_rpc_secret(self):
+        self.keys.set("discord_rpc_secret", self.rpc_secret.text())
+        self.keys.save()
+        if "discord_rpc_secret" in getattr(self, "key_edits", {}):
+            self.key_edits["discord_rpc_secret"].setText(self.rpc_secret.text())
 
     # ======================================================================= tests
     def test_stt(self):
@@ -1266,8 +1348,9 @@ class MainWindow(DashboardMixin, SettingsTabMixin, ManualTabMixin, TextTabMixin,
 
 SETUP_GUIDE = """
 <h2>How it works</h2>
-<p><b>Hearing others:</b> the app records what Discord plays (loopback), recognises the speech, translates it and
-shows subtitles / reads it to you in a natural voice.<br>
+<p><b>Hearing others:</b> the app records only what the Discord app plays, recognises the speech, translates it and
+shows subtitles / reads it to you in a natural voice. By default you hear only the translations; press <b>F9</b>
+(Hear people) to also hear their own voices.<br>
 <b>Speaking:</b> the app listens to your microphone, translates what you say and speaks it with a natural voice into
 a <i>virtual audio cable</i>. Discord uses that cable as its microphone, so your friends hear the translated voice.</p>
 
@@ -1288,11 +1371,11 @@ synthetic voice.</li>
 <h2>3. App settings</h2>
 <ul>
 <li><b>Output tab →</b> "Send to (virtual cable)": <b>CABLE Input</b>. "Play on": your headphones.</li>
-<li><b>Input tab →</b> Method: <i>loopback</i>, Device: the headphones Discord plays to. Microphone: your real mic.</li>
+<li><b>Input tab →</b> Method: <i>Only the Discord app</i>. Microphone: your real mic.</li>
 <li><b>Live tab →</b> choose languages (or Auto-detect) and press <b>Start</b>.</li>
 </ul>
 
-<h2>Better: isolate Discord's audio (optional)</h2>
+<h2>Older Windows (before Windows 10 2004): isolate Discord's audio</h2>
 <p>Loopback hears <i>everything</i> on that device (game, music…). To translate only Discord: install a second cable
 (VB-Cable A+B) or use Voicemeeter, set Discord's <b>Output Device</b> to that cable, choose it as the Input-tab device
 (Method: <i>input device</i> → "CABLE-A Output", or loopback of "CABLE-A Input"), and enable
@@ -1306,7 +1389,10 @@ ElevenLabs / OpenAI voices. Put keys in the <b>API Keys</b> tab.</p>
 
 <h2>Tips</h2>
 <ul>
-<li>Wear headphones - otherwise your mic hears the translations (the app can ignore the mic while they play).</li>
+<li>Wear headphones - otherwise your mic hears the translations. The app recognises its own voice and ignores
+it; without headphones you can also tick "Ignore my mic while translations play" (Input tab).</li>
+<li>The app warns you when Discord uses your real microphone - then people would hear your own voice instead of
+only the translation.</li>
 <li>Latency is usually 1-3 s per sentence. Faster: Groq/OpenAI speech recognition, a small/fast AI model,
 Edge or ElevenLabs Flash voices, and a shorter "End of sentence after silence" (Input tab).</li>
 <li>Use push-to-talk if you talk a lot in your own language and only want some sentences translated.</li>

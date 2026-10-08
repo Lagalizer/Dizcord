@@ -58,7 +58,27 @@ def main():
 
     eng = Engine(prof, config.KeyStore(), emit)
     spoken = []
-    eng.play = lambda direction, audio, sr, wait=True: spoken.append((direction, len(audio) / sr))
+
+    class SilentSpeaker:
+        """Synthesises each translation in memory instead of playing it (so you hear nothing)."""
+
+        def __init__(self, direction):
+            self.dir, self.recent = direction, []
+
+        def say(self, utt, interrupt_kind=None):
+            audio, sr = eng.synthesize(utt.text, utt.lang, self.dir)
+            spoken.append((self.dir, round(len(audio) / sr, 1)))
+            utt.started_at = time.monotonic()
+            if utt.on_start:
+                utt.on_start(utt)
+
+        def backlog(self):
+            return 0
+
+        def cancel(self, kind=None):
+            pass
+
+    eng.speakers = {d: SilentSpeaker(d) for d in ("incoming", "outgoing")}
 
     print(f"Loading Whisper '{model}' (first run downloads it into models\\)…")
     eng.start()

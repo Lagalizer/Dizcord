@@ -40,9 +40,10 @@ le PC. C'est la seule chose en dehors du dossier, car Windows a besoin d'un pilo
 - Périphérique de sortie : votre casque.
 - Désactivez la Suppression du bruit, la Suppression de l'écho et le Contrôle automatique du gain.
 
-**Étape 4. Réglez l'application.** Choisissez le profil Gratuit, sans clé. Dans l'onglet Sortie, envoyez votre
-voix traduite vers CABLE Input. Dans l'onglet Entrée, choisissez le loopback du casque sur lequel Discord joue, et
-votre vrai micro. Dans l'onglet Direct, choisissez les langues. Puis appuyez sur Démarrer, ou sur la touche F5.
+**Étape 4. Réglez l'application.** Choisissez le profil Gratuit, sans clés. Dans l'onglet Sortie, envoyez votre
+voix traduite vers CABLE Input. Dans l'onglet Entrée, gardez la méthode Seulement l'application Discord et
+choisissez votre vrai micro. Dans l'onglet Direct, choisissez les langues. Puis appuyez sur Démarrer, ou sur la
+touche F5.
 
 Le modèle vocal, Whisper small, pèse environ 460 mégaoctets et se télécharge à la première utilisation.
 
@@ -90,25 +91,42 @@ toujours synchronisés.
 
 C'est la fonction principale. Elle marche dans les deux sens, et chaque sens peut être activé séparément.
 
-**Entrant : ils parlent, vous entendez.** L'application écoute le son que Discord joue dans votre casque. Elle
-reconnaît la parole, la traduit, affiche des sous-titres et, si vous le voulez, dit la traduction. Vous choisissez
-la langue qu'ils parlent, ou Détection automatique.
+**Entrant : ils parlent, vous entendez.** L'application écoute seulement l'application Discord : elle n'entend donc
+jamais sa propre voix, votre jeu ni votre musique, et elle continue d'écouter pendant qu'elle parle. Elle reconnaît
+la parole, la traduit, affiche des sous-titres et, si vous le voulez, prononce la traduction. Vous choisissez la
+langue qu'ils parlent, ou Détection automatique. Choisir la langue rend la reconnaissance sur votre PC environ deux
+fois plus rapide.
 
 **Sortant : vous parlez, ils entendent.** L'application écoute votre micro, traduit ce que vous dites et le
 prononce dans Discord par le câble virtuel. Votre propre voix n'est pas envoyée à Discord, seulement la traduction.
+L'application vous prévient si Discord utilise votre vrai micro au lieu du câble.
+
+**Entendre les personnes, la touche F9.** Par défaut, vous n'entendez que les traductions. Pendant que le
+traducteur tourne, l'application baisse Discord dans le mélangeur de volume de Windows, et lui rend son volume
+quand vous appuyez sur Arrêter. Appuyez sur F9, ou sur le bouton Entendre les personnes, pour entendre aussi leurs
+propres voix. Vous pouvez changer la touche dans l'onglet Entrée.
+
+**Une seule voix, dans l'ordre.** Les traductions de l'appel et les messages du chat lus à voix haute partagent une
+seule voix : elles ne parlent jamais en même temps. Tout est dit dans l'ordre où cela a été prononcé, et rien n'est
+sauté : la phrase suivante est préparée pendant que l'actuelle joue, et quand les phrases s'accumulent, la voix
+parle un peu plus vite.
+
+**Qui parle.** La voix de l'application peut dire qui a parlé, par exemple les deux premières lettres du nom, ou le
+nom complet. Choisissez-le dans l'onglet Sortie, sous La voix de l'application. Dans les appels, les noms viennent
+de l'application Discord elle-même : dans l'onglet Sortie, sous Qui parle, ajoutez une fois votre propre
+application Discord. Les messages du chat ont toujours le nom de l'auteur.
 
 Dans l'onglet **Direct**, vous réglez les langues des deux sens, regardez les vumètres et lisez la transcription.
 Vous pouvez utiliser un bouton appuyer pour parler, et la case Tapez pour parler, où vous tapez une phrase qui est
 traduite et dite dans Discord. L'option Répondre dans la langue qu'ils parlent fait suivre à votre langue de sortie
 la dernière langue détectée chez l'autre personne.
 
-Dans l'onglet **Entrée**, vous choisissez ce qui est écouté et comment votre micro se déclenche : détection de la
-voix, appuyer pour parler ou bascule. Il y a aussi un réglage de sensibilité et une protection contre l'écho, qui
-ignore le son capturé pendant que vos propres traductions jouent.
+Dans l'onglet **Entrée**, vous choisissez ce qu'il faut écouter et comment votre micro démarre : détection de la
+voix, appuyer pour parler, ou bascule. Il y a aussi un réglage de sensibilité. L'application reconnaît sa propre
+voix quand votre micro l'entend, et l'ignore.
 
-Dans l'onglet **Sortie**, vous choisissez où jouent les traductions, le câble virtuel de votre voix, et le retour
-direct avec atténuation. L'atténuation baisse les voix d'origine pendant qu'une traduction est dite, pour que vous
-les entendiez encore.
+Dans l'onglet **Sortie**, vous choisissez où jouent les traductions, le câble virtuel pour votre voix, la voix de
+l'application et qui parle.
 
 Tous les périphériques audio sont aussi réunis au même endroit, dans l'onglet Paramètres, sous Périphériques audio.
 
@@ -166,6 +184,10 @@ une petite fenêtre à côté. Vous choisissez dans l'onglet Texte, sous Affiche
 serveurs, les messages privés, les groupes, les fils et les posts de forum, même avec Discord en arrière-plan. Les
 messages déjà dans votre langue, et vos propres messages, sont ignorés. Les traductions ne s'affichent que lorsque
 Discord est la fenêtre active, elles ne cachent donc jamais votre jeu.
+
+**Lecture à voix haute.** Seuls les nouveaux messages sont lus à voix haute. Les messages vers lesquels vous
+remontez, les messages modifiés et les anciens messages sont traduits à l'écran, mais jamais lus. Les messages du
+chat partagent la voix de l'application avec les traductions de l'appel : les deux ne parlent jamais en même temps.
 
 L'onglet Texte a d'autres outils :
 
@@ -229,15 +251,27 @@ quelques secondes après son ouverture.
 `runtime\python.exe tools\selftest.py`. Il joue une phrase de test dans le câble virtuel et teste les deux sens.
 S'il finit par le mot PASS, la reconnaissance, la traduction et la voix marchent.
 
+**Lancez le test d'appel.** `runtime\python.exe tools\calltest.py` joue un faux appel vocal dans le câble virtuel.
+Il vérifie que chaque phrase est traduite dans l'ordre, que l'application n'entend jamais sa propre voix et que
+deux voix ne jouent jamais en même temps. Lancez-le quand vous n'êtes pas dans un appel Discord.
+
 **Personne n'entend ma traduction.** Dans Discord, le périphérique d'entrée doit être CABLE Output. Dans
 l'application, l'onglet Sortie doit envoyer vers CABLE Input. Vérifiez que la Suppression du bruit est désactivée
 dans Discord.
 
-**L'application n'entend rien.** Dans l'onglet Entrée, vérifiez que le périphérique loopback est celui sur lequel
-Discord joue. Regardez les vumètres dans l'onglet Direct. S'ils ne bougent pas, le périphérique n'est pas le bon.
+**L'application n'entend rien.** Dans l'onglet Entrée, vérifiez la méthode. Avec Seulement l'application Discord,
+Discord doit être ouvert. Avec loopback, le périphérique doit être celui sur lequel Discord joue. Regardez les
+indicateurs de niveau dans l'onglet Direct. S'ils ne bougent pas, le réglage est faux.
 
-**Ma traduction s'entend deux fois, ou l'application se traduit elle-même.** Activez la protection contre l'écho
-dans l'onglet Entrée et portez un casque.
+**Ma traduction s'entend deux fois, ou l'application se traduit elle-même.** Utilisez la méthode Seulement
+l'application Discord dans l'onglet Entrée, et portez un casque.
+
+**Discord est muet.** C'est voulu pendant que le traducteur tourne : appuyez sur F9 pour entendre aussi les
+personnes. Si Dizcord a été fermé brutalement, ouvrez-le une fois et il rend son volume à Discord, ou montez
+Discord dans le mélangeur de volume de Windows.
+
+**Les gens entendent ma vraie voix.** Dans Discord, le périphérique d'entrée doit être CABLE Output, pas votre
+micro. L'application affiche un avertissement quand Discord utilise votre vrai micro.
 
 **Un moteur échoue.** Ouvrez l'onglet Journal. Un message qui dit forbidden, ou blocked, veut souvent dire que la
 clé ou le modèle n'est pas autorisé pour votre compte. Essayez un autre moteur, puis testez à nouveau.

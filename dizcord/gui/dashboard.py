@@ -141,6 +141,10 @@ class DashboardMixin:
         g.setColumnStretch(1, 1)
         g.setColumnStretch(3, 1)
         lay.addLayout(g)
+        self.dash_hear = QCheckBox("👂 Hear the people too (not only the translations)")
+        self.dash_hear.setChecked(self.engine.hear_originals)
+        self.dash_hear.toggled.connect(self._on_hear_toggled)
+        lay.addWidget(self.dash_hear)
         lay.addWidget(_muted("Translates what people say in a call and speaks your words in their language. "
                              "Set up the audio once in the Setup tab."))
         lay.addStretch(1)
@@ -248,7 +252,8 @@ class DashboardMixin:
                 ("Translate text on screen (OCR)", ch.get("hotkey_ocr")),
                 ("Show originals / translations", ch.get("hotkey_inline")),
                 ("Start / stop voice translator (in the app)", "F5"),
-                ("Push-to-talk (voice, PTT mode)", inp.get("ptt_key"))]
+                ("Push-to-talk (voice, PTT mode)", inp.get("ptt_key")),
+                ("Hear the people in the call on / off", inp.get("hear_key"))]
         rows = "".join(f"<tr><td style='padding-right:10px'><b>{html.escape((k or '-').upper())}</b></td>"
                        f"<td style='color:{c['muted']}'>{html.escape(tr(label))}</td></tr>" for label, k in keys)
         self.dash_hotkeys.setText(f"<table>{rows}</table>")

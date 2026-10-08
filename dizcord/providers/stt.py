@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 
 import numpy as np
 
@@ -136,11 +137,19 @@ class OpenAICompatSTT(STTProvider):
             r = self.http("POST", url, headers=headers, data=data, files=files,
                           timeout=float(self.s("timeout", 30)))
         except ProviderError as e:
+            blocked = self.__dict__.setdefault("_blocked", set())     # models this account was refused
+            other = [m for m in self.model_options if m != model and m not in blocked]
             if fmt == "verbose_json" and "response_format" in str(e):
                 data["response_format"] = "json"
                 files = {"file": ("speech.wav", wav_bytes(audio, SR), "audio/wav")}
                 r = self.http("POST", url, headers=headers, data=data, files=files,
                               timeout=float(self.s("timeout", 30)))
+            elif other and re.search(r"model_permission_blocked|model_not_found|does not exist|not have access",
+                                     str(e)):
+                # this account may not use that model: use the provider's other model from now on
+                blocked.add(model)
+                self.settings["model"] = other[0]
+                return self.transcribe(audio, language)
             else:
                 raise
         j = r.json()

@@ -29,12 +29,15 @@ APP_STATE_FILE = DATA_DIR / "app_state.json"
 for _d in (DATA_DIR, PROFILES_DIR, TRANSCRIPTS_DIR, LOGS_DIR, MODELS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
+PROFILE_VERSION = 2       # 2: Discord-only listening, mic always on, faster end of sentence, app voice settings
+
 
 def default_profile() -> dict:
     me = languages.system_language()
     them = "en" if languages.base(me) != "en" else "es"
     return {
         "name": "Default",
+        "version": PROFILE_VERSION,
         "incoming": {                      # what other people say -> me
             "enabled": True,
             "source_lang": "auto",
@@ -48,7 +51,8 @@ def default_profile() -> dict:
             "voice_pitch": 0.0,            # ... and pitch in semitones
             "passthrough": False,          # forward the captured Discord audio to my output device
             "passthrough_volume": 1.0,
-            "duck_passthrough": 0.25,      # passthrough volume multiplier while a translation is spoken
+            "duck_passthrough": 0.25,      # their voices' volume while a translation is spoken (hear people: on)
+            "hear_originals": False,       # hear the people in the call too (hotkey input.hear_key toggles it)
         },
         "outgoing": {                      # what I say -> other people
             "enabled": True,
@@ -65,17 +69,20 @@ def default_profile() -> dict:
             "monitor": False,
         },
         "input": {
-            "listen_mode": "loopback",     # loopback = capture an output device, device = capture an input device
+            "listen_mode": "app",          # app = only the Discord app (recommended) | loopback = an output device
+                                           # | device = an input device
+            "listen_app": "discord",       # app mode: which app ("discord" = Discord / PTB / Canary)
             "listen_device": "",           # loopback: output device name; device: input device name
             "mic_device": "",
             "mic_mode": "vad",             # vad | ptt | toggle
             "ptt_key": "f8",
-            "listen_vad": {"auto": True, "threshold_db": -45.0, "silence_ms": 700, "min_speech_ms": 350,
+            "hear_key": "f9",              # toggles hearing the people in the call (their original voices)
+            "listen_vad": {"auto": True, "threshold_db": -45.0, "silence_ms": 550, "min_speech_ms": 350,
                            "max_utterance_s": 12.0, "pre_roll_ms": 300},
-            "mic_vad": {"auto": True, "threshold_db": -42.0, "silence_ms": 600, "min_speech_ms": 300,
+            "mic_vad": {"auto": True, "threshold_db": -42.0, "silence_ms": 500, "min_speech_ms": 300,
                         "max_utterance_s": 15.0, "pre_roll_ms": 300},
-            "pause_listen_while_speaking": True,   # avoid translating our own translations (echo)
-            "ignore_mic_while_playing": True,      # don't send incoming translations back out through the mic
+            "pause_listen_while_speaking": True,   # loopback mode: avoid translating our own translations (echo)
+            "ignore_mic_while_playing": False,     # True only without headphones (the echo filter handles the rest)
             "mic_gain_db": 0.0,
             "listen_gain_db": 0.0,
         },
@@ -94,6 +101,15 @@ def default_profile() -> dict:
             "settings": {},
             "voices": {},                  # provider_id -> {"incoming": voice, "outgoing": voice}
             "gender": "female",
+        },
+        "speech": {                        # the app voice (call translations and chat messages read aloud)
+            "names": "short",              # say who talked: short (first 2 letters) | first | full | off
+            "repeat_names": False,         # say the name again when the same person goes on talking
+            "catchup": True,               # speak a little faster when lines pile up
+        },
+        "speakers": {                      # who is talking in the voice call (Discord RPC, optional)
+            "enabled": False,
+            "client_id": "",               # your Discord application's id (the secret is in data/keys.json)
         },
         "chat": {
             "auto_translate": False,       # read Discord messages from the window and translate them
@@ -162,10 +178,27 @@ def profile_path(name: str) -> Path:
     return PROFILES_DIR / f"{_safe_filename(name)}.json"
 
 
+def migrate(data: dict) -> dict:
+    """Bring a profile saved by an older version up to date (only settings that were left at their old default)."""
+    if not data or data.get("version", 1) >= PROFILE_VERSION:
+        return data
+    inp = data.setdefault("input", {})
+    if inp.get("listen_mode", "loopback") == "loopback" and not inp.get("listen_device"):
+        inp["listen_mode"] = "app"            # was: everything on the default speakers (the app's own voice too)
+    if inp.get("ignore_mic_while_playing", True):
+        inp["ignore_mic_while_playing"] = False   # keep listening to you while the app talks (echo filter instead)
+    for key, old, new in (("listen_vad", 700, 550), ("mic_vad", 600, 500)):
+        vad = inp.get(key) or {}
+        if vad.get("silence_ms") == old:
+            vad["silence_ms"] = new
+    data["version"] = PROFILE_VERSION
+    return data
+
+
 def load_profile(name: str) -> dict:
     p = profile_path(name)
     data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
-    prof = deep_merge(default_profile(), data)
+    prof = deep_merge(default_profile(), migrate(data))
     prof["name"] = name
     return prof
 
@@ -188,7 +221,7 @@ def delete_profile(name: str) -> None:
 
 def import_profile(path: str) -> dict:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    prof = deep_merge(default_profile(), data)
+    prof = deep_merge(default_profile(), migrate(data))
     prof["name"] = data.get("name") or Path(path).stem
     return prof
 
@@ -272,6 +305,7 @@ KNOWN_KEYS = {
     "elevenlabs":    ("ElevenLabs", "ELEVENLABS_API_KEY"),
     "deepgram":      ("Deepgram", "DEEPGRAM_API_KEY"),
     "libretranslate": ("LibreTranslate", "LIBRETRANSLATE_API_KEY"),
+    "discord_rpc_secret": ("Discord application client secret (who is talking)", "DISCORD_RPC_SECRET"),
 }
 
 

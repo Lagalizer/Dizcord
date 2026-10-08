@@ -40,8 +40,8 @@ Mikrofon.
 - Schalte Rauschunterdrückung, Echounterdrückung und Automatische Verstärkungsregelung aus.
 
 **Schritt 4. Richte die App ein.** Wähle das Profil Kostenlos, ohne Schlüssel. Im Tab Ausgang schickst du deine
-übersetzte Stimme an CABLE Input. Im Tab Eingang wählst du den Loopback des Headsets, auf dem Discord läuft, und
-dein echtes Mikrofon. Im Tab Live wählst du die Sprachen. Dann drückst du Start oder die Taste F5.
+übersetzte Stimme an CABLE Input. Im Tab Eingang lässt du die Methode Nur die Discord-App und wählst dein echtes
+Mikrofon. Im Tab Live wählst du die Sprachen. Dann drück Start oder die Taste F5.
 
 Das Sprachmodell, Whisper small, ist etwa 460 Megabyte groß und wird bei der ersten Nutzung heruntergeladen.
 
@@ -89,25 +89,41 @@ synchron.
 
 Das ist die Hauptfunktion. Sie arbeitet in zwei Richtungen, und jede kann einzeln eingeschaltet werden.
 
-**Eingehend: sie sprechen, du hörst.** Die App hört den Ton, den Discord in dein Headset spielt. Sie erkennt die
-Sprache, übersetzt sie, zeigt Untertitel und spricht, wenn du willst, die Übersetzung. Du wählst die Sprache, die
-sie sprechen, oder Automatisch erkennen.
+**Eingehend: Sie sprechen, du hörst.** Die App hört nur die Discord-App, also hört sie nie ihre eigene Stimme, dein
+Spiel oder deine Musik, und sie hört weiter zu, während sie spricht. Sie erkennt die Sprache, übersetzt sie, zeigt
+Untertitel und spricht, wenn du willst, die Übersetzung. Du wählst die Sprache, die sie sprechen, oder Automatisch
+erkennen. Wenn du die Sprache wählst, ist die Erkennung auf deinem PC etwa doppelt so schnell.
 
-**Ausgehend: du sprichst, sie hören.** Die App hört dein Mikrofon, übersetzt, was du sagst, und spricht es über
-das virtuelle Kabel in Discord. Deine eigene Stimme wird nicht an Discord geschickt, nur die Übersetzung.
+**Ausgehend: du sprichst, sie hören.** Die App hört dein Mikrofon, übersetzt, was du sagst, und spricht es über das
+virtuelle Kabel in Discord. Deine eigene Stimme wird nicht an Discord geschickt, nur die Übersetzung. Die App warnt
+dich, wenn Discord dein echtes Mikrofon statt des Kabels nutzt.
+
+**Leute hören, die Taste F9.** Standardmäßig hörst du nur die Übersetzungen. Solange der Übersetzer läuft, macht
+die App Discord im Windows-Lautstärkemixer leise und gibt ihm seine Lautstärke zurück, wenn du Stopp drückst. Drück
+F9 oder die Schaltfläche Leute hören, um auch ihre eigenen Stimmen zu hören. Die Taste kannst du im Tab Eingang
+ändern.
+
+**Eine Stimme, der Reihe nach.** Die Übersetzungen aus dem Anruf und die vorgelesenen Chatnachrichten teilen sich
+eine Stimme, sie reden also nie durcheinander. Alles wird in der Reihenfolge gesagt, in der es gesprochen wurde,
+und nichts wird ausgelassen: Der nächste Satz wird vorbereitet, während der aktuelle läuft, und wenn sich Sätze
+stauen, spricht die Stimme etwas schneller.
+
+**Wer spricht.** Die Stimme der App kann sagen, wer gesprochen hat, zum Beispiel die ersten zwei Buchstaben des
+Namens oder den ganzen Namen. Das wählst du im Tab Ausgang unter Die Stimme der App. In Anrufen kommen die Namen
+aus der Discord-App selbst: Im Tab Ausgang trägst du unter Wer spricht einmal deine eigene Discord-Anwendung ein.
+Chatnachrichten haben immer den Namen des Autors.
 
 Im Tab **Live** stellst du die Sprachen beider Richtungen ein, siehst die Pegelanzeigen und liest das Transkript.
 Du kannst einen Push-to-Talk-Knopf nutzen und das Feld Tippen zum Sprechen, in das du eine Zeile tippst, die
 übersetzt und in Discord gesprochen wird. Die Option In der Sprache antworten, die sie sprechen, lässt deine
 Ausgabesprache der zuletzt bei der anderen Person erkannten Sprache folgen.
 
-Im Tab **Eingang** wählst du, was gehört wird und wie dein Mikrofon auslöst: Sprachaktivierung, Push-to-Talk oder
-Umschalten. Es gibt auch eine Empfindlichkeitsregelung und einen Echoschutz, der das aufgenommene Audio ignoriert,
-während deine eigenen Übersetzungen laufen.
+Im Tab **Eingang** wählst du, was die App hört und wie dein Mikrofon startet: Sprachaktivierung, Push-to-Talk oder
+Umschalten. Es gibt auch eine Empfindlichkeitsregelung. Die App erkennt ihre eigene Stimme, wenn dein Mikrofon sie
+hört, und ignoriert sie.
 
-Im Tab **Ausgang** wählst du, wo Übersetzungen abgespielt werden, das virtuelle Kabel für deine Stimme und die
-Durchleitung mit Absenkung. Die Absenkung macht die Originalstimmen leiser, während eine Übersetzung gesprochen
-wird, damit du sie trotzdem hörst.
+Im Tab **Ausgang** wählst du, wo die Übersetzungen laufen, das virtuelle Kabel für deine Stimme, die Stimme der App
+und wer spricht.
 
 Alle Audiogeräte findest du außerdem gesammelt an einem Ort, im Tab Einstellungen unter Audiogeräte.
 
@@ -164,6 +180,10 @@ Fenster daneben. Das wählst du im Tab Text unter Übersetzungen anzeigen. Es fu
 Direktnachrichten, Gruppen, Threads und Forenbeiträgen, sogar wenn Discord im Hintergrund ist. Nachrichten, die
 schon in deiner Sprache sind, und deine eigenen werden übersprungen. Die Übersetzungen erscheinen nur, solange
 Discord das aktive Fenster ist, sie verdecken also nie dein Spiel.
+
+**Vorlesen.** Nur neue Nachrichten werden vorgelesen. Nachrichten, zu denen du zurückscrollst, bearbeitete und alte
+Nachrichten werden auf dem Bildschirm übersetzt, aber nie vorgelesen. Chatnachrichten teilen sich die Stimme der
+App mit den Übersetzungen aus dem Anruf, also sprechen die beiden nie gleichzeitig.
 
 Der Tab Text hat weitere Werkzeuge:
 
@@ -225,14 +245,26 @@ Sekunden nach dem Start.
 aus. Er spielt einen Testsatz in das virtuelle Kabel und testet beide Richtungen. Endet er mit dem Wort PASS,
 funktionieren Erkennung, Übersetzung und Stimme.
 
+**Starte den Anruftest.** `runtime\python.exe tools\calltest.py` spielt einen gespielten Sprachanruf in das
+virtuelle Kabel. Er prüft, dass jeder Satz der Reihe nach übersetzt wird, dass die App nie ihre eigene Stimme hört
+und dass nie zwei Stimmen gleichzeitig laufen. Starte ihn, wenn du in keinem Discord-Anruf bist.
+
 **Niemand hört meine Übersetzung.** In Discord muss das Eingabegerät CABLE Output sein. In der App muss der Tab
 Ausgang an CABLE Input senden. Prüfe, ob die Rauschunterdrückung in Discord aus ist.
 
-**Die App hört nichts.** Prüfe im Tab Eingang, ob das Loopback-Gerät das ist, auf dem Discord läuft. Schau auf die
-Pegelanzeigen im Tab Live. Bewegen sie sich nicht, ist das Gerät falsch.
+**Die App hört nichts.** Prüfe im Tab Eingang die Methode. Mit Nur die Discord-App muss Discord geöffnet sein. Mit
+Loopback muss das Gerät das sein, auf dem Discord läuft. Schau auf die Pegelanzeigen im Tab Live. Wenn sie sich
+nicht bewegen, stimmt die Einstellung nicht.
 
-**Meine Übersetzung ist doppelt zu hören, oder die App übersetzt sich selbst.** Schalte den Echoschutz im Tab
-Eingang ein und nutze ein Headset.
+**Meine Übersetzung ist doppelt zu hören, oder die App übersetzt sich selbst.** Nutze im Tab Eingang die Methode
+Nur die Discord-App und trage ein Headset.
+
+**Discord ist stumm.** Das ist Absicht, solange der Übersetzer läuft: Drück F9, um die Leute auch zu hören. Wenn
+Dizcord abrupt geschlossen wurde, öffne es einmal, dann gibt es Discord seine Lautstärke zurück, oder dreh Discord
+im Windows-Lautstärkemixer wieder auf.
+
+**Die Leute hören meine echte Stimme.** In Discord muss das Eingabegerät CABLE Output sein, nicht dein Mikrofon.
+Die App zeigt eine Warnung, wenn Discord dein echtes Mikrofon nutzt.
 
 **Eine Engine schlägt fehl.** Öffne den Tab Log. Eine Meldung mit forbidden oder blocked bedeutet meist, dass der
 Schlüssel oder das Modell für dein Konto nicht erlaubt ist. Versuche eine andere Engine und teste erneut.

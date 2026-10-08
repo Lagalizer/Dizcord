@@ -24,9 +24,15 @@ def _is_auto(voice) -> bool:
 
 class TTSProvider(Provider):
     kind = "tts"
+    streams = False           # synthesize_stream() hands out audio while it is still being made
 
     def synthesize(self, text: str, lang: str, voice: str, gender: str = "female") -> tuple[np.ndarray, int]:
         raise NotImplementedError
+
+    def synthesize_stream(self, text: str, lang: str, voice: str, gender: str, on_audio, speed: float = 1.0):
+        """Calls on_audio(mono float32 chunk, sample_rate) as the audio arrives. Only for streams = True providers,
+        which also apply `speed` themselves (1 = normal)."""
+        on_audio(*self.synthesize(text, lang, voice, gender))
 
     def list_voices(self, lang: str | None = None) -> list[tuple[str, str]]:
         return []
@@ -74,6 +80,116 @@ class EdgeTTS(TTSProvider):
         if not data:
             raise ProviderError(f"Edge TTS returned no audio for voice {v}.")
         return decode_audio(data)
+
+    @property
+    def streams(self):
+        try:
+            import av  # noqa: F401  (decodes the MP3 stream piece by piece; installed with faster-whisper)
+            return True
+        except ImportError:
+            return False
+
+    HEDGE_S = 0.7            # no sound yet after this long: ask a second time and use whichever answer comes first
+
+    def synthesize_stream(self, text, lang, voice, gender, on_audio, speed=1.0):
+        """Plays while Edge is still sending: the first sound arrives ~0.3 s after the request instead of after the
+        whole sentence. The speed goes into Edge's own rate (better quality than stretching afterwards).
+
+        Edge's answer time varies a lot (0.3 - 1.3 s measured, same text): when nothing has arrived after HEDGE_S,
+        the same request is sent again and the first one to answer is used (the other is cancelled). A request that
+        fails before any sound is also simply sent again, once."""
+        import av
+        import edge_tts
+        v = L.default_voice(lang, gender) if _is_auto(voice) else voice
+        pitch = int(self.s("pitch", 0))
+        rate = max(-50.0, min(100.0, ((1 + int(self.s("rate", 0)) / 100) * float(speed) - 1) * 100))
+        codec = av.CodecContext.create("mp3", "r")
+        got = [0]
+
+        def out(frames):
+            for fr in frames:
+                a = fr.to_ndarray()
+                if a.dtype != np.float32:
+                    a = a.astype(np.float32) / 32768.0
+                a = a.reshape(len(fr.layout.channels), -1).mean(axis=0) if a.ndim > 1 or fr.format.is_planar \
+                    else a.reshape(-1, len(fr.layout.channels)).mean(axis=1)
+                if len(a):
+                    got[0] += len(a)
+                    on_audio(np.ascontiguousarray(a, dtype=np.float32), fr.sample_rate)
+
+        async def one(tag, q):
+            try:
+                com = edge_tts.Communicate(text, v, rate=_pct(rate), volume=_pct(self.s("volume", 0)),
+                                           pitch=f"+{pitch}Hz" if pitch >= 0 else f"{pitch}Hz")
+                async for chunk in com.stream():
+                    if chunk["type"] == "audio" and chunk["data"]:
+                        await q.put((tag, chunk["data"]))
+                await q.put((tag, None))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                await q.put((tag, e))
+
+        async def run():
+            loop = asyncio.get_running_loop()
+            q: asyncio.Queue = asyncio.Queue()
+            tasks = [asyncio.create_task(one(0, q))]
+            hedge_at = loop.time() + self.HEDGE_S
+            winner, errors = None, []
+            try:
+                while True:
+                    wait = None if winner is not None or len(tasks) > 1 else max(0.0, hedge_at - loop.time())
+                    try:
+                        tag, data = await asyncio.wait_for(q.get(), wait)
+                    except asyncio.TimeoutError:
+                        tasks.append(asyncio.create_task(one(1, q)))       # slow answer: ask again
+                        continue
+                    if isinstance(data, Exception):
+                        if winner == tag or (winner is None and len(errors) + 1 >= 2):
+                            raise data
+                        errors.append(data)
+                        if winner is None and len(tasks) < 2:
+                            tasks.append(asyncio.create_task(one(1, q)))   # failed before any sound: ask again
+                        continue
+                    if winner is None:
+                        if data is None:                                    # an empty answer
+                            errors.append(RuntimeError("no audio"))
+                            if len(errors) >= 2:
+                                return
+                            if len(tasks) < 2:
+                                tasks.append(asyncio.create_task(one(1, q)))
+                            continue
+                        winner = tag
+                        for i, t in enumerate(tasks):
+                            if i != tag:
+                                t.cancel()
+                    if tag != winner:
+                        continue
+                    if data is None:
+                        break
+                    for pkt in codec.parse(data):
+                        out(codec.decode(pkt))
+                try:
+                    out(codec.decode(None))
+                except Exception:  # noqa: BLE001 - nothing left in the decoder
+                    pass
+            finally:
+                for t in tasks:
+                    t.cancel()
+
+        try:
+            asyncio.run(run())
+        except Exception as e:
+            raise ProviderError(f"Edge TTS ({v}): {e}") from e
+        if not got[0]:
+            raise ProviderError(f"Edge TTS returned no audio for voice {v}.")
+
+    def warmup(self):
+        """Load the voice libraries and open a first connection now, so the first sentence isn't the slow one."""
+        try:
+            self.synthesize_stream("Ok.", "en", "auto", "female", lambda a, sr: None)
+        except Exception:  # noqa: BLE001 - only a warm-up
+            pass
 
     def list_voices(self, lang=None):
         import edge_tts

@@ -9,11 +9,16 @@ speak in theirs. Runs on your own Windows PC - free engines included, no account
 ## What it does
 
 - **You hear them in your language.** Listens to what people say in Discord, transcribes it, translates it, shows
-  subtitles and can read the translation to you.
+  subtitles and can read the translation to you. It listens to the Discord app only - never to its own voice, your
+  game or your music - so it keeps listening while it talks and nothing said in the call is dropped.
+- **Only the translations, or them too.** By default you hear only the translated voice; press **F9** to also hear
+  the people themselves. The app voice can say who talked ("Jo: …"), never talks over itself, and speeds up a
+  little when lines pile up so it stays close to live.
 - **They hear you in yours.** You talk into your mic; the translation is spoken into Discord through a virtual
-  audio cable.
+  audio cable. The app warns you if Discord is using your real microphone (then people would hear your own voice).
 - **Text too.** Translates Discord messages inside Discord itself (servers, DMs, threads), anything you highlight
-  with the mouse, and text on your screen with OCR. Write in their language with a hotkey.
+  with the mouse, and text on your screen with OCR. Write in their language with a hotkey. New messages can be read
+  aloud - scrolling back through old messages never reads them out.
 - **Your voice, your way.** Pick the voices for what you hear and for what they hear, with speed, pitch and volume
   for each - with any voice engine.
 - **Free or premium.** Every step (speech, translation, AI, voice) has a free engine and optional cloud
@@ -52,4 +57,5 @@ everything on your PC.
 Dizcord.exe / Dizcord.bat    start the app        Dizcord-debug.bat   start with a console (bug reports)
 setup.bat                    (re)build the runtime  install_extras.bat  optional offline engines / GPU
 main.py, dizcord\            source code          tools\selftest.py   check the whole pipeline
+                                                  tools\calltest.py   a pretend call: order, echo, overlap
 ```

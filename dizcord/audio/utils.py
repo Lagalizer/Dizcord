@@ -57,6 +57,58 @@ class StreamResampler:
         return out
 
 
+class BlockResampler:
+    """High-quality resampling of audio that arrives in pieces (streamed voices): the same polyphase filter as
+    resample(), run on blocks with some context on both sides and cut on exact sample boundaries, so the joined
+    output equals resampling the whole clip at once."""
+
+    CONTEXT = 64       # input samples of context each side (the filter is ~10 input samples long)
+
+    def __init__(self, sr_in: int, sr_out: int):
+        g = math.gcd(int(sr_in), int(sr_out))
+        self.up, self.down = int(sr_out) // g, int(sr_in) // g
+        self.same = self.up == self.down
+        self.pad = -(-self.CONTEXT // self.down) * self.down        # context, a multiple of `down`
+        self.buf = np.zeros(self.pad, dtype=np.float32)            # left context: silence before the start
+        self.done = 0                                               # input samples already turned into output
+
+    def _run(self, end: int, right_pad: int) -> np.ndarray:
+        """Output for input [done, end) of the stream; buf starts at input index done - pad."""
+        seg = self.buf[: self.pad + (end - self.done) + right_pad]
+        if right_pad > len(seg) - self.pad - (end - self.done):
+            seg = np.concatenate([seg, np.zeros(right_pad, dtype=np.float32)])
+        y = resample(seg, self.down, self.up) if _resample_poly is not None else np.interp(
+            np.arange(len(seg) * self.up // self.down) * self.down / self.up, np.arange(len(seg)), seg)
+        a = self.pad * self.up // self.down
+        b = a + (end - self.done) * self.up // self.down
+        out = np.asarray(y[a:b], dtype=np.float32)
+        drop = end - self.done                                       # keep `pad` samples of left context
+        self.buf = self.buf[drop:]
+        self.done = end
+        return out
+
+    def process(self, x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=np.float32)
+        if self.same:
+            return x
+        self.buf = np.concatenate([self.buf, x])
+        have = self.done + len(self.buf) - self.pad                  # input samples received so far
+        end = ((have - self.pad) // self.down) * self.down           # leave `pad` samples of right context
+        if end <= self.done:
+            return np.zeros(0, dtype=np.float32)
+        return self._run(end, self.pad)
+
+    def flush(self) -> np.ndarray:
+        if self.same:
+            return np.zeros(0, dtype=np.float32)
+        have = self.done + len(self.buf) - self.pad
+        end = -(-have // self.down) * self.down                      # round up: the tail is padded with silence
+        if end <= self.done:
+            return np.zeros(0, dtype=np.float32)
+        self.buf = np.concatenate([self.buf, np.zeros(end - have, dtype=np.float32)])
+        return self._run(end, self.pad)
+
+
 def rms_db(x: np.ndarray) -> float:
     if len(x) == 0:
         return -100.0

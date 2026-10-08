@@ -36,9 +36,9 @@ primeiros passos. Ele só abre nessa primeira vez; você pode vê-lo de novo nes
 - Dispositivo de saída: seus fones.
 - Desligue Supressão de ruído, Cancelamento de eco e Controle automático de ganho.
 
-**Passo 4. Configure o app.** Escolha o perfil Grátis, sem chaves. Na aba Saída, mande sua voz traduzida para
-CABLE Input. Na aba Entrada, escolha o loopback dos fones onde o Discord toca, e o seu microfone de verdade. Na
-aba Ao vivo, escolha os idiomas. Depois aperte Iniciar, ou a tecla F5.
+**Passo 4. Configure o app.** Escolha o perfil Grátis, sem chaves. Na aba Saída, mande sua voz traduzida para CABLE
+Input. Na aba Entrada, deixe o método Só o app do Discord e escolha o seu microfone de verdade. Na aba Ao vivo,
+escolha os idiomas. Depois aperte Iniciar, ou a tecla F5.
 
 O modelo de fala, Whisper small, tem cerca de 460 megabytes e é baixado na primeira vez que você o usa.
 
@@ -84,24 +84,38 @@ Opções que aparecem em dois lugares, por exemplo no Painel e na aba Texto, fic
 
 Esta é a função principal. Ela funciona em duas direções, e cada uma pode ser ligada separadamente.
 
-**Entrada: eles falam, você ouve.** O app escuta o som que o Discord toca nos seus fones. Ele reconhece a fala,
-traduz, mostra legendas e, se você quiser, fala a tradução. Você escolhe o idioma que eles falam, ou Detectar
-automaticamente.
+**Entrada: eles falam, você ouve.** O app escuta só o app do Discord, então nunca ouve a própria voz, o seu jogo ou
+a sua música, e continua ouvindo enquanto fala. Ele reconhece a fala, traduz, mostra legendas e, se você quiser,
+fala a tradução. Você escolhe o idioma que eles falam, ou Detectar automaticamente. Escolher o idioma deixa o
+reconhecimento no seu PC cerca de duas vezes mais rápido.
 
 **Saída: você fala, eles ouvem.** O app escuta o seu microfone, traduz o que você diz e fala no Discord pelo cabo
-virtual. Sua própria voz não é enviada ao Discord, só a tradução.
+virtual. Sua própria voz não é enviada ao Discord, só a tradução. O app avisa se o Discord usar o seu microfone de
+verdade em vez do cabo.
+
+**Ouvir as pessoas, a tecla F9.** Por padrão você ouve só as traduções. Enquanto o tradutor roda, o app abaixa o
+Discord no mixer de volume do Windows e devolve o volume quando você aperta Parar. Aperte F9, ou o botão Ouvir as
+pessoas, para ouvir também a voz delas. Você pode trocar a tecla na aba Entrada.
+
+**Uma voz, em ordem.** As traduções da chamada e as mensagens do chat lidas em voz alta usam uma só voz, então
+nunca falam uma por cima da outra. Tudo é dito na ordem em que foi falado, e nada é pulado: a próxima frase é
+preparada enquanto a atual toca, e quando as frases se acumulam a voz fala um pouco mais rápido.
+
+**Quem está falando.** A voz do app pode dizer quem falou, por exemplo as duas primeiras letras do nome, ou o nome
+completo. Escolha isso na aba Saída, em A voz do app. Nas chamadas os nomes vêm do próprio app do Discord: na aba
+Saída, em Quem está falando, adicione uma vez o seu próprio aplicativo do Discord. As mensagens do chat sempre têm
+o nome do autor.
 
 Na aba **Ao vivo** você define os idiomas das duas direções, vê os medidores de nível e lê a transcrição. Você
 pode usar um botão de aperte para falar, e a caixa Digite para falar, onde você digita uma frase e ela é
 traduzida e falada no Discord. A opção Responder no idioma que eles falam faz o seu idioma de saída seguir o
 último idioma detectado da outra pessoa.
 
-Na aba **Entrada** você escolhe o que escutar e como o seu microfone começa: detecção de voz, aperte para falar
-ou alternar. Há também um controle de sensibilidade e uma proteção contra eco, que ignora o áudio capturado
-enquanto as suas próprias traduções tocam.
+Na aba **Entrada** você escolhe o que escutar e como o seu microfone começa: detecção de voz, aperte para falar ou
+alternar. Há também um controle de sensibilidade. O app reconhece a própria voz quando o seu microfone a ouve, e a
+ignora.
 
-Na aba **Saída** você escolhe onde as traduções tocam, o cabo virtual da sua voz e o repasse com abaixamento.
-O abaixamento diminui as vozes originais enquanto uma tradução é falada, para você continuar ouvindo-as.
+Na aba **Saída** você escolhe onde as traduções tocam, o cabo virtual da sua voz, a voz do app e quem está falando.
 
 Todos os dispositivos de som também ficam juntos num só lugar, na aba Configurações, em Dispositivos de som.
 
@@ -156,6 +170,10 @@ pequena ao lado dele. Você escolhe isso na aba Texto, em Mostrar traduções. F
 diretas, grupos, tópicos e posts de fórum, mesmo com o Discord em segundo plano. Mensagens que já estão no seu
 idioma, e as suas próprias mensagens, são puladas. As traduções só aparecem enquanto o Discord é a janela ativa,
 então elas nunca cobrem o seu jogo.
+
+**Leitura em voz alta.** Só as mensagens novas são lidas em voz alta. As mensagens para as quais você rola de
+volta, as mensagens editadas e as antigas são traduzidas na tela, mas nunca lidas. As mensagens do chat usam a
+mesma voz do app que as traduções da chamada, então as duas nunca falam ao mesmo tempo.
 
 A aba Texto tem mais ferramentas:
 
@@ -217,14 +235,26 @@ de abrir.
 uma frase de teste no cabo virtual e roda as duas direções. Se terminar com a palavra PASS, reconhecimento,
 tradução e voz estão funcionando.
 
+**Rode o teste de chamada.** `runtime\python.exe tools\calltest.py` toca uma chamada de voz de mentira no cabo
+virtual. Ele confere se cada frase é traduzida em ordem, se o app nunca ouve a própria voz e se duas vozes nunca
+tocam ao mesmo tempo. Rode quando você não estiver numa chamada do Discord.
+
 **Ninguém ouve a minha tradução.** No Discord, o dispositivo de entrada precisa ser CABLE Output. No app, a aba
 Saída precisa enviar para CABLE Input. Confira se a Supressão de ruído está desligada no Discord.
 
-**O app não ouve nada.** Na aba Entrada, confira se o dispositivo de loopback é aquele onde o Discord toca. Olhe
-os medidores de nível na aba Ao vivo. Se eles não se mexem, o dispositivo está errado.
+**O app não ouve nada.** Na aba Entrada, confira o método. Com Só o app do Discord, o Discord precisa estar aberto.
+Com loopback, o dispositivo precisa ser aquele onde o Discord toca. Olhe os medidores de nível na aba Ao vivo. Se
+eles não se mexem, a configuração está errada.
 
-**Minha tradução é ouvida duas vezes, ou o app traduz a si mesmo.** Ligue a proteção contra eco na aba Entrada e
-use fones.
+**Minha tradução é ouvida duas vezes, ou o app traduz a si mesmo.** Use o método Só o app do Discord na aba
+Entrada, e use fones.
+
+**O Discord está mudo.** Isso é de propósito enquanto o tradutor roda: aperte F9 para ouvir as pessoas também. Se o
+Dizcord foi fechado de repente, abra-o uma vez e ele devolve o volume do Discord, ou aumente o Discord no mixer de
+volume do Windows.
+
+**As pessoas ouvem a minha voz de verdade.** No Discord, o dispositivo de entrada precisa ser CABLE Output, não o
+seu microfone. O app mostra um aviso quando o Discord usa o seu microfone de verdade.
 
 **Um mecanismo falha.** Abra a aba Log. Uma mensagem que diz forbidden, ou blocked, geralmente significa que a
 chave ou o modelo não é permitido para a sua conta. Tente outro mecanismo e teste de novo.

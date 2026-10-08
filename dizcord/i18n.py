@@ -126,9 +126,12 @@ def tr(text):
             return pre + hit + post
     for rx, out in _patterns:
         m = rx.fullmatch(text)
+        edges = ("", "")
+        if not m and pre:                            # "⚠ " + a message with {0} parts
+            m, edges = rx.fullmatch(text[len(pre):]), (pre, "")
         if m:
             groups = m.groupdict()
-            return re.sub(r"\{(\d)\}", lambda g: groups.get(f"g{g.group(1)}") or "", out)
+            return edges[0] + re.sub(r"\{(\d)\}", lambda g: groups.get(f"g{g.group(1)}") or "", out) + edges[1]
     if len(_misses) > 20000:
         _misses.clear()
     _misses[text] = None

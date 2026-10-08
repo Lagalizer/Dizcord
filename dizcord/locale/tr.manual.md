@@ -38,7 +38,7 @@ Klasörün dışındaki tek şey budur, çünkü Windows'un sanal bir mikrofon o
 - Gürültü Azaltma, Yankı Engelleme ve Otomatik Kazanç Kontrolü'nü kapat.
 
 **Adım 4. Uygulamayı ayarla.** Ücretsiz, anahtarsız profilini seç. Çıkış sekmesinde çevrilmiş sesini CABLE Input'a
-gönder. Giriş sekmesinde Discord'un çaldığı kulaklığın loopback'ini ve gerçek mikrofonunu seç. Canlı sekmesinde
+gönder. Giriş sekmesinde Sadece Discord uygulaması yöntemini bırak ve gerçek mikrofonunu seç. Canlı sekmesinde
 dilleri seç. Sonra Başlat'a ya da F5 tuşuna bas.
 
 Konuşma modeli Whisper small yaklaşık 460 megabayttır ve ilk kullanımda indirilir.
@@ -83,23 +83,37 @@ Pano senin kontrol merkezindir. İlk sekmedir ve her şeyi tek bakışta göster
 
 Bu ana özelliktir. İki yönde çalışır ve her yön ayrı açılabilir.
 
-**Gelen: onlar konuşur, sen duyarsın.** Uygulama, Discord'un kulaklığına çaldığı sesi dinler. Konuşmayı tanır,
-çevirir, altyazı gösterir ve istersen çeviriyi seslendirir. Onların konuştuğu dili ya da Otomatik algıla'yı
-seçersin.
+**Gelen: onlar konuşur, sen duyarsın.** Uygulama sadece Discord uygulamasını dinler; bu yüzden kendi sesini,
+oyununu ya da müziğini asla duymaz ve konuşurken dinlemeye devam eder. Konuşmayı tanır, çevirir, altyazı gösterir
+ve istersen çeviriyi söyler. Onların konuştuğu dili ya da Otomatik algıla'yı seçersin. Dili seçmek,
+bilgisayarındaki tanımayı yaklaşık iki kat hızlandırır.
 
 **Giden: sen konuşursun, onlar duyar.** Uygulama mikrofonunu dinler, söylediğini çevirir ve sanal kablo üzerinden
-Discord'da söyler. Kendi sesin Discord'a gönderilmez, yalnızca çeviri gider.
+Discord'da söyler. Kendi sesin Discord'a gönderilmez, yalnızca çeviri gider. Discord kablo yerine gerçek
+mikrofonunu kullanırsa uygulama seni uyarır.
+
+**İnsanları duy, F9 tuşu.** Varsayılan olarak sadece çevirileri duyarsın. Çevirmen çalışırken uygulama Discord'u
+Windows ses karıştırıcısında kısar ve Durdur'a bastığında sesini geri verir. Onların kendi seslerini de duymak için
+F9'a ya da İnsanları duy düğmesine bas. Tuşu Giriş sekmesinden değiştirebilirsin.
+
+**Tek ses, sırayla.** Görüşme çevirileri ve sesli okunan sohbet mesajları tek bir sesi paylaşır, bu yüzden asla
+birbirinin üstüne konuşmaz. Her şey söylendiği sırayla söylenir ve hiçbir şey atlanmaz: şu anki cümle çalarken
+sonraki hazırlanır, cümleler birikince ses biraz daha hızlı konuşur.
+
+**Kim konuşuyor.** Uygulamanın sesi kimin konuştuğunu söyleyebilir, örneğin adın ilk iki harfini ya da tam adı.
+Bunu Çıkış sekmesinde, Uygulamanın sesi altında seç. Görüşmelerde adlar doğrudan Discord uygulamasından gelir:
+Çıkış sekmesinde, Kim konuşuyor altında kendi Discord uygulamanı bir kez ekle. Sohbet mesajlarında her zaman
+yazarın adı vardır.
 
 **Canlı** sekmesinde iki yönün dillerini ayarlar, seviye göstergelerini izler ve dökümü okursun. Bir bas-konuş
 düğmesi ve Söylemek için yaz kutusu kullanabilirsin: bir satır yazarsın, çevrilir ve Discord'da söylenir. Onların
 konuştuğu dilde cevap ver seçeneği, çıkış dilinin karşı tarafta en son algılanan dili izlemesini sağlar.
 
 **Giriş** sekmesinde neyin dinleneceğini ve mikrofonunun nasıl başlayacağını seçersin: ses etkinliği, bas-konuş ya
-da geçiş. Bir hassasiyet ayarı ve kendi çevirilerin çalarken yakalanan sesi yok sayan bir yankı koruması da
-vardır.
+da aç-kapa. Bir hassasiyet ayarı da vardır. Uygulama, mikrofonun kendi sesini duyduğunda onu tanır ve yok sayar.
 
-**Çıkış** sekmesinde çevirilerin nerede çalacağını, sesin için sanal kabloyu ve kısma ile doğrudan aktarımı
-seçersin. Kısma, bir çeviri söylenirken özgün sesleri alçaltır, böylece onları duymaya devam edersin.
+**Çıkış** sekmesinde çevirilerin nerede çalacağını, sesin için sanal kabloyu, uygulamanın sesini ve kimin
+konuştuğunu seçersin.
 
 Tüm ses aygıtları ayrıca tek bir yerde, Ayarlar sekmesindeki Ses aygıtları bölümünde toplanmıştır.
 
@@ -154,6 +168,10 @@ Yeni mesajlar çevrilir ve doğrudan Discord'un içinde, özgün metnin üstünd
 gösterilir. Bunu Metin sekmesinde Çevirileri göster altında seçersin. Sunucularda, özel mesajlarda, gruplarda, alt
 başlıklarda ve forum gönderilerinde, Discord arka plandayken bile çalışır. Zaten senin dilinde olan mesajlar ve
 kendi mesajların atlanır. Çeviriler yalnızca Discord etkin pencereyken görünür, bu yüzden oyununu asla kapatmaz.
+
+**Sesli okuma.** Sadece yeni mesajlar sesli okunur. Geri kaydırdığın mesajlar, düzenlenen ve eski mesajlar ekranda
+çevrilir ama asla okunmaz. Sohbet mesajları uygulamanın sesini görüşme çevirileriyle paylaşır, bu yüzden ikisi asla
+aynı anda konuşmaz.
 
 Metin sekmesinde başka araçlar da var:
 
@@ -213,14 +231,25 @@ başlatmayı önerir. Uygulama ayrıca açıldıktan birkaç saniye sonra sessiz
 komutunu çalıştır. Sanal kabloya bir test cümlesi çalar ve iki yönü de dener. PASS kelimesiyle biterse tanıma,
 çeviri ve ses çalışıyor demektir.
 
+**Görüşme testini çalıştır.** `runtime\python.exe tools\calltest.py` sanal kabloya sahte bir sesli görüşme çalar.
+Her cümlenin sırayla çevrildiğini, uygulamanın kendi sesini asla duymadığını ve iki sesin asla aynı anda
+çalmadığını kontrol eder. Bir Discord görüşmesinde değilken çalıştır.
+
 **Kimse çevirimi duymuyor.** Discord'da giriş aygıtı CABLE Output olmalı. Uygulamada Çıkış sekmesi CABLE Input'a
 göndermeli. Discord'da Gürültü Azaltma'nın kapalı olduğunu kontrol et.
 
-**Uygulama hiçbir şey duymuyor.** Giriş sekmesinde loopback aygıtının, Discord'un çaldığı aygıt olduğunu kontrol
-et. Canlı sekmesindeki seviye göstergelerine bak. Kıpırdamıyorlarsa aygıt yanlıştır.
+**Uygulama hiçbir şey duymuyor.** Giriş sekmesinde yöntemi kontrol et. Sadece Discord uygulaması ile Discord açık
+olmalı. Loopback ile aygıt, Discord'un çaldığı aygıt olmalı. Canlı sekmesindeki seviye göstergelerine bak.
+Kıpırdamıyorlarsa ayar yanlıştır.
 
-**Çevirim iki kez duyuluyor ya da uygulama kendini çeviriyor.** Giriş sekmesinde yankı korumasını aç ve kulaklık
-kullan.
+**Çevirim iki kez duyuluyor ya da uygulama kendini çeviriyor.** Giriş sekmesinde Sadece Discord uygulaması
+yöntemini kullan ve kulaklık tak.
+
+**Discord'un sesi yok.** Çevirmen çalışırken bu bilerek yapılır: insanları da duymak için F9'a bas. Dizcord aniden
+kapandıysa bir kez aç, Discord'un sesini geri verir; ya da Windows ses karıştırıcısında Discord'un sesini aç.
+
+**İnsanlar gerçek sesimi duyuyor.** Discord'da giriş aygıtı mikrofonun değil, CABLE Output olmalı. Discord gerçek
+mikrofonunu kullandığında uygulama bir uyarı gösterir.
 
 **Bir motor hata veriyor.** Günlük sekmesini aç. forbidden ya da blocked diyen bir mesaj genelde anahtarın ya da
 modelin hesabın için izinli olmadığı anlamına gelir. Başka bir motor dene ve yeniden test et.

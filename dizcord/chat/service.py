@@ -20,9 +20,28 @@ import time
 
 from .. import languages as L
 from ..providers import REGISTRY, ProviderError
+from ..speech import Utterance
 from . import winutil
 
 log = logging.getLogger("dizcord.chat")
+
+DISCORD_EPOCH_MS = 1420070400000
+SPEAK_MAX_AGE_S = 180            # never read out messages older than this (scrolled-to or loaded late)
+
+
+def message_time(mid: str) -> float | None:
+    """When a Discord message was sent (unix seconds), from its id (a snowflake)."""
+    try:
+        return ((int(mid) >> 22) + DISCORD_EPOCH_MS) / 1000.0
+    except (TypeError, ValueError):
+        return None
+
+
+def _snowflake(mid: str) -> int:
+    try:
+        return int(mid)
+    except (TypeError, ValueError):
+        return 0
 
 
 class ChatService:
@@ -38,8 +57,9 @@ class ChatService:
         self._pool = concurrent.futures.ThreadPoolExecutor(4, thread_name_prefix="chat-tr")
         self._ordered: queue.Queue = queue.Queue()
         threading.Thread(target=self._emit_in_order, name="chat-emit", daemon=True).start()
-        self._speech_q: queue.Queue = queue.Queue()
-        threading.Thread(target=self._speech_worker, name="chat-speech", daemon=True).start()
+        # newest message id each chat had when we first saw it: only messages written after that are read out,
+        # so scrolling up (Discord loads older messages) or switching chats never reads old messages aloud
+        self.newest: dict[str, int] = {}
         self._cache: collections.OrderedDict = collections.OrderedDict()   # (text, target, engine) -> (out, det)
         self._cache_lock = threading.Lock()
         self._providers: dict = {}
@@ -148,6 +168,7 @@ class ChatService:
             reader = DiscordReader()
             seen: dict[str, str] = {}
             authors: dict[str, str] = {}
+            newest = self.newest
             channel = None
             last_rect = None
             missing_since = None
@@ -187,8 +208,14 @@ class ChatService:
                         backlog = {id(it) for _, it in items[-15:]}
                     prev_author = ""
                     recent = {id(it) for _, it in items[-3:]}
+                    first_look: dict[str, int] = {}
+                    for _n, it in items:
+                        cid, mid = reader.ids_of(it)
+                        if cid not in newest:
+                            first_look[cid] = max(first_look.get(cid, 0), _snowflake(mid))
+                    newest.update(first_look)        # what is on screen when a chat is first seen is "old"
                     for list_name, it in items:
-                        _, mid = reader.ids_of(it)
+                        cid, mid = reader.ids_of(it)
                         if mid in self.inline_ids and mid not in reader.content_els:
                             reader.track(it)     # Discord re-rendered it: find its text element again
                         if mid in seen and id(it) not in recent:
@@ -207,9 +234,15 @@ class ChatService:
                             continue
                         edited = mid in seen and seen[mid] != "" and seen[mid] != text
                         seen[mid] = text
+                        # read aloud only brand-new messages: newer than anything seen in this chat, sent in the last
+                        # minutes, not an edit (a link preview loading also changes the text) and not a backlog
+                        sent = message_time(mid)
+                        speak = (_snowflake(mid) > newest.get(cid, 0) and backlog is None and not edited
+                                 and (sent is None or time.time() - sent < SPEAK_MAX_AGE_S))
+                        newest[cid] = max(newest.get(cid, 0), _snowflake(mid))
                         if text:
                             fut = self._pool.submit(self._chat_translate, msg, text, edited)
-                            self._ordered.put((fut, channel, backlog is not None))
+                            self._ordered.put((fut, channel, speak))
                 except Exception as e:  # Discord re-rendering, element vanished...
                     log.debug("reader: %s", e)
                     reader.lists = []
@@ -306,7 +339,7 @@ class ChatService:
     def _emit_in_order(self):
         """Shows translations in the order the messages were written, as soon as each one is ready."""
         while True:
-            fut, channel, history = self._ordered.get()
+            fut, channel, speak = self._ordered.get()
             try:
                 ev = fut.result()
             except ProviderError as e:
@@ -329,47 +362,18 @@ class ChatService:
                 continue
             self.inline_ids[ev["id"]] = True
             self.emit(dict(ev, channel=channel))
-            if self.cfg.get("speak") and not history:   # old messages shown when opening a chat aren't read out
-                if self._speech_q.qsize() >= 3 and self.cfg.get("speak_mode", "queue") == "queue":
-                    # falling behind: skip the oldest so speech stays current
-                    try:
-                        self._speech_q.get_nowait()
-                    except queue.Empty:
-                        pass
-                self._speech_q.put((ev["author"], out, target))
+            if self.cfg.get("speak") and speak:
+                self.speak(ev["author"], out, target)
 
-    def _speech_worker(self):
-        """Reads translated chat messages out loud, never two at once. Mode (Text tab):
-        queue     - one after the other (skips the oldest waiting ones when falling behind)
-        interrupt - a new translation cuts the one that is speaking and is read right away"""
-        while True:
-            item = self._speech_q.get()
-            interrupt = self.cfg.get("speak_mode", "queue") == "interrupt"
-            if interrupt:                       # only the newest message matters
-                while not self._speech_q.empty():
-                    try:
-                        item = self._speech_q.get_nowait()
-                    except queue.Empty:
-                        break
-            author, out, target = item
-            try:
-                text = f"{author}: {out}" if author and author != "?" else out
-                audio, sr = self.engine.synthesize(text, target, "incoming")
-                if interrupt and not self._speech_q.empty():
-                    continue                    # a newer message arrived while this one was being prepared
-                cfg = self.engine.profile["incoming"]
-                dev = self.engine.outputs.get(cfg["output_device"])
-                clip = dev.play(audio, sr, float(cfg.get("volume", 1.0)), "incoming")
-                limit = len(audio) / sr + 5
-                waited = 0.0
-                while not clip.done.wait(0.05) and waited < limit:
-                    waited += 0.05
-                    if self.cfg.get("speak_mode", "queue") == "interrupt" and not self._speech_q.empty():
-                        dev.fade_out(clip)      # the new translation takes over
-                        clip.done.wait(0.5)
-                        break
-            except Exception as e:
-                self.emit({"type": "chat_error", "text": f"Speaking chat message: {e}"})
+    def speak(self, author: str, text: str, lang: str):
+        """Read a chat message out loud with the app voice, in your headphones. It shares the voice with the call
+        translations, so two things are never said at the same time. Mode (Text tab):
+        queue     - one after the other (when falling behind, the oldest waiting chat messages are skipped)
+        interrupt - a new message cuts the chat message that is being read"""
+        interrupt = self.cfg.get("speak_mode", "queue") == "interrupt"
+        who = author if author and author != "?" else ""
+        self.engine.speaker("incoming").say(Utterance(text, lang, kind="chat", who=who),
+                                            interrupt_kind="chat" if interrupt else None)
 
     # ================================================================== selection
     def start_selection(self):

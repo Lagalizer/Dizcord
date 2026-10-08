@@ -159,7 +159,8 @@ class SettingsTabMixin:
                                 ("Translate what I typed in Discord", "chat.hotkey_draft", "ctrl+alt+y"),
                                 ("Translate text on screen (OCR)", "chat.hotkey_ocr", "ctrl+alt+o"),
                                 ("Show originals / translations in Discord", "chat.hotkey_inline", "ctrl+alt+i"),
-                                ("Push-to-talk (voice translator)", "input.ptt_key", "f8")]:
+                                ("Push-to-talk (voice translator)", "input.ptt_key", "f8"),
+                                ("Hear the people in the call on / off", "input.hear_key", "f9")]:
             e = self.bind(QLineEdit(), path)
             e.setPlaceholderText(f"e.g. {eg} - empty = off")
             f.addRow(label, e)
@@ -229,6 +230,7 @@ class SettingsTabMixin:
         if self.set_listen_dev.kind != self.listen_device.kind:
             self.set_listen_dev.refresh(self.listen_device.kind)
         self.set_listen_dev.setValue(self.listen_device.value())
+        self.set_listen_dev.setEnabled(self.listen_device.isEnabled())
         self.set_listen_dev.blockSignals(False)
 
     # ------------------------------------------------------------------ language of the app
