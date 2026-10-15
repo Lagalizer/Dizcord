@@ -144,6 +144,12 @@ class DashboardMixin:
         self.dash_hear = QCheckBox("👂 Hear the people too (not only the translations)")
         self.dash_hear.setChecked(self.engine.hear_originals)
         self.dash_hear.toggled.connect(self._on_hear_toggled)
+        speak = self.bind(QCheckBox("🔊 Speak the translations (off: only show the text of who is talking)"),
+                          "incoming.speak")
+        speak.setToolTip("Off: the translations are only shown as text (subtitles window and Live tab) and you hear "
+                         "the people in the call with their own voices.")
+        speak.clicked.connect(self._on_speak_clicked)
+        lay.addWidget(speak)
         lay.addWidget(self.dash_hear)
         lay.addWidget(_muted("Translates what people say in a call and speaks your words in their language. "
                              "Set up the audio once in the Setup tab."))

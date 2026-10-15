@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import html
+import logging
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +18,8 @@ from .. import languages as L
 from ..audio.utils import decode_audio, pcm16_to_float
 from ..config import MODELS_DIR
 from .base import Field, Provider, ProviderError, register
+
+log = logging.getLogger("dizcord.tts")
 
 
 def _is_auto(voice) -> bool:
@@ -401,39 +405,93 @@ class PiperTTS(TTSProvider):
     id = "piper"
     name = "Piper"
     local = True
-    description = ("Fast offline voices. Download voices (.onnx + .onnx.json) from "
-                   "huggingface.co/rhasspy/piper-voices into models/piper/. 'auto' picks a voice "
-                   "whose file name starts with the language code (e.g. pt_BR-faber-medium.onnx).")
+    description = ("Fast offline voices. 'auto' picks a voice of the language (file name starting with the language "
+                   "code, e.g. pt_PT-tugão-medium.onnx); a missing one is downloaded once from "
+                   "huggingface.co/rhasspy/piper-voices into the voices folder (about 60 MB per voice).")
     requires = ["piper"]
     pip_hint = "pip install piper-tts"
     fields = [
         Field("folder", "Voices folder", "path", str(MODELS_DIR / "piper")),
         Field("length_scale", "Slowness (1 = normal)", "float", 0.95, min=0.5, max=2, step=0.05),
+        Field("auto_download", "Download missing voices", "bool", True,
+              help="Download the voice of a language the first time it is needed"),
     ]
+    has_downloads = True
     _loaded: dict = {}
+    _download_lock = threading.Lock()
 
     def _voice_files(self):
         folder = Path(self.s("folder"))
         folder.mkdir(parents=True, exist_ok=True)
         return sorted(folder.glob("*.onnx"))
 
-    def _pick(self, lang, voice):
+    @staticmethod
+    def _locale(lang) -> str:
+        return L.locale_tag(lang).replace("-", "_")
+
+    def _local_voice(self, lang, exact=False):
+        """A voice file of this language: of its country (pt_PT for pt-PT), else - unless exact - of any country."""
         files = self._voice_files()
-        if not files:
-            raise ProviderError(f"Piper: no voices in {self.s('folder')}. Download some .onnx voices first.")
-        if not _is_auto(voice):
-            for f in files:
-                if f.stem == voice or str(f) == voice:
-                    return f
-        loc = L.locale_tag(lang).replace("-", "_").lower()
-        b = L.base(lang)
+        loc = self._locale(lang).lower()
         for f in files:
             if f.stem.lower().startswith(loc):
                 return f
-        for f in files:
-            if f.stem.lower().startswith(b + "_"):
-                return f
-        raise ProviderError(f"Piper: no voice for language '{lang}' in {self.s('folder')}.")
+        if not exact:
+            b = L.base(lang)
+            for f in files:
+                if f.stem.lower().startswith(b + "_"):
+                    return f
+        return None
+
+    def _missing_voice(self, lang) -> dict | None:
+        """The catalogue voice to download for `lang`, or None when the voices folder already has a good one."""
+        if self._local_voice(lang, exact=True):
+            return None
+        from .. import voice_download
+        try:
+            v = voice_download.piper_voice_for(self._locale(lang))
+        except Exception:  # noqa: BLE001  (no internet and no catalogue yet: use what is there)
+            return None
+        if v is None or (v["language"]["code"].lower() != self._locale(lang).lower() and self._local_voice(lang)):
+            return None
+        if all((Path(self.s("folder")) / name).is_file() for _u, name, _s in voice_download.piper_files(v)):
+            return None
+        return v
+
+    def downloads_needed(self, langs):
+        out = []
+        for v in {v["key"]: v for v in filter(None, map(self._missing_voice, set(langs)))}.values():
+            from .. import voice_download
+            out.append((f"Piper voice {v['key']}", sum(s for _u, _n, s in voice_download.piper_files(v))))
+        return out
+
+    def download(self, langs, progress=None, cancelled=lambda: False):
+        from .. import voice_download
+        with PiperTTS._download_lock:
+            files = [f for v in filter(None, map(self._missing_voice, set(langs)))
+                     for f in voice_download.piper_files(v)]
+            voice_download.fetch_all(files, Path(self.s("folder")), progress, cancelled)
+
+    def download_dir(self):
+        return self.s("folder")
+
+    def _pick(self, lang, voice):
+        if not _is_auto(voice):
+            for f in self._voice_files():
+                if f.stem == voice or str(f) == voice:
+                    return f
+        found = self._local_voice(lang, exact=True)
+        if found is None and self.s("auto_download", True):
+            try:
+                self.download([lang])
+            except Exception as e:  # noqa: BLE001
+                log.warning("Piper: could not download a voice for %s: %s", lang, e)
+            found = self._local_voice(lang)
+        found = found or self._local_voice(lang)
+        if found is None:
+            raise ProviderError(f"Piper: no voice for {L.name(lang)} in {self.s('folder')}. Voice tab → Download, "
+                                "or put a voice (.onnx + .onnx.json) from huggingface.co/rhasspy/piper-voices there.")
+        return found
 
     def synthesize(self, text, lang, voice, gender="female"):
         from piper import PiperVoice
@@ -469,8 +527,9 @@ class KokoroTTS(TTSProvider):
     name = "Kokoro"
     local = True
     description = ("High quality offline voices (82M model). Languages: English, Spanish, French, Italian, "
-                   "Portuguese (BR), Hindi, Japanese, Chinese. Put kokoro-v1.0.onnx and voices-v1.0.bin "
-                   "in models/kokoro/ (github.com/thewh1teagle/kokoro-onnx releases).")
+                   "Portuguese (BR), Hindi, Japanese, Chinese. The model files (kokoro-v1.0.onnx and "
+                   "voices-v1.0.bin, about 354 MB) are downloaded once into models/kokoro/ "
+                   "(github.com/thewh1teagle/kokoro-onnx releases).")
     requires = ["kokoro_onnx"]
     pip_hint = "pip install kokoro-onnx"
     fields = [
@@ -478,14 +537,39 @@ class KokoroTTS(TTSProvider):
         Field("voices_path", "Voices file", "path", str(MODELS_DIR / "kokoro" / "voices-v1.0.bin")),
         Field("speed", "Speed", "float", 1.05, min=0.5, max=2, step=0.05),
     ]
+    has_downloads = True
+    _URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+    _SIZES = {"model_path": 325_532_387, "voices_path": 28_214_398}
     _engine = None
+
+    def _files(self):
+        """[(url, path, bytes)] of the model files that are not there yet."""
+        out = []
+        for key, default in (("model_path", "kokoro-v1.0.onnx"), ("voices_path", "voices-v1.0.bin")):
+            p = Path(self.s(key))
+            if not p.is_file():
+                out.append((f"{self._URL}/{default}", p, self._SIZES[key]))
+        return out
+
+    def downloads_needed(self, langs):
+        return [(f"Kokoro {p.name}", size) for _u, p, size in self._files()]
+
+    def download(self, langs, progress=None, cancelled=lambda: False):
+        from ..voice_download import fetch
+        todo = self._files()
+        total, done = sum(f[2] for f in todo), 0
+        for url, path, size in todo:
+            done += fetch(url, path, progress, cancelled, done, total) or size
+
+    def download_dir(self):
+        return str(Path(self.s("model_path")).parent)
 
     def _load(self):
         from kokoro_onnx import Kokoro
         if KokoroTTS._engine is None:
             mp, vp = Path(self.s("model_path")), Path(self.s("voices_path"))
             if not mp.exists() or not vp.exists():
-                raise ProviderError(f"Kokoro: model files not found ({mp.name}, {vp.name}).")
+                raise ProviderError(f"Kokoro: model files not found ({mp.name}, {vp.name}) - Voice tab → Download.")
             KokoroTTS._engine = Kokoro(str(mp), str(vp))
         return KokoroTTS._engine
 

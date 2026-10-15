@@ -7,19 +7,25 @@ import threading
 from PySide6.QtCore import QObject, QProcess, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSizePolicy, QSlider, QSpinBox,
-                               QVBoxLayout, QWidget)
+                               QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSlider,
+                               QSpinBox, QVBoxLayout, QWidget)
 
 from .. import languages as L
 from ..i18n import tr
 from ..audio import devices
+from ..config import app_path, portable_path
 from ..providers import REGISTRY, Field, models_info
+from ..providers.base import describe_downloads
 
 DEFAULT_DEVICE = "(System default)"
 
 
 class _Relay(QObject):
     done = Signal(object, object)   # result, error
+
+
+class _Progress(QObject):
+    progress = Signal(object, object)   # done bytes, total bytes
 
 
 _pending: set = set()
@@ -326,6 +332,7 @@ class ProviderPanel(QWidget):
 
     changed = Signal()
     log = Signal(str)
+    downloaded = Signal()           # model / voice files were downloaded
 
     def __init__(self, kind: str, keys, parent=None):
         super().__init__(parent)
@@ -357,6 +364,18 @@ class ProviderPanel(QWidget):
         rl.addWidget(self.req_label, 1)
         rl.addWidget(self.install_btn)
         lay.addWidget(self.req_row)
+        self.dl_row = QWidget()             # model / voice files the engine still has to download
+        dl = QHBoxLayout(self.dl_row)
+        dl.setContentsMargins(0, 0, 0, 0)
+        self.dl_label = QLabel()
+        self.dl_label.setObjectName("warn")
+        self.dl_label.setWordWrap(True)
+        self.dl_btn = QPushButton("Download")
+        self.dl_btn.clicked.connect(self.start_download)
+        dl.addWidget(self.dl_label, 1)
+        dl.addWidget(self.dl_btn)
+        lay.addWidget(self.dl_row)
+        self.dl_row.hide()
         self.form_host = QWidget()
         self.form = QFormLayout(self.form_host)
         self.form.setContentsMargins(0, 6, 0, 0)
@@ -364,6 +383,13 @@ class ProviderPanel(QWidget):
         self.current = None
         self.combo.changed.connect(self._on_provider_changed)
         self._proc = None
+        self.langs = lambda: []             # languages the voices speak (set by the main window)
+        self._dl_busy = False
+        self._dl_asked: set = set()
+        self._dl_relay = _Progress()
+        self._dl_relay.progress.connect(self._dl_progress)
+        self._dl_timer = QTimer(self, singleShot=True, interval=700)
+        self._dl_timer.timeout.connect(lambda: self.check_downloads(ask=True))
 
     # --- state
     def set_state(self, provider_id: str, settings_by_provider: dict):
@@ -384,15 +410,19 @@ class ProviderPanel(QWidget):
         for key, (f, w) in self.field_widgets.items():
             if f.kind == "secret":
                 continue
-            vals[key] = widget_value(w)
+            vals[key] = portable_path(widget_value(w)) if f.kind == "path" else widget_value(w)
         self.settings_by_provider[self.current] = vals
 
     def _on_provider_changed(self):
         self._store_current()
-        self._build(self.combo.value())
+        self._build(self.combo.value(), ask=True)
         self.changed.emit()
 
-    def _build(self, pid):
+    def _build(self, pid, ask=False):
+        self._build_form(pid)
+        self.check_downloads(ask)
+
+    def _build_form(self, pid):
         while self.form.rowCount():
             self.form.removeRow(0)
         self.field_widgets.clear()
@@ -409,9 +439,14 @@ class ProviderPanel(QWidget):
         saved = self.settings_by_provider.get(pid, {})
         for f in cls.fields:
             w = make_field_widget(f, self.keys)
-            if f.kind != "secret":
+            if f.kind == "path":
+                set_widget_value(w, str(app_path(saved.get(f.key, f.default), f.default)))
+            elif f.kind != "secret":
                 set_widget_value(w, saved.get(f.key, f.default))
+            if f.kind != "secret":
                 change_signal(w).connect(self.changed.emit)
+                if cls.has_downloads:
+                    change_signal(w).connect(self._dl_timer.start)    # e.g. another Whisper model: download it?
             else:
                 w.editingFinished.connect(lambda w=w, ref=f.key_ref: self._save_key(ref, w.text()))
             if f.help:
@@ -602,4 +637,73 @@ class ProviderPanel(QWidget):
         importlib.invalidate_caches()
         self.log.emit("Install finished." if code == 0 else f"Install failed (exit code {code}).")
         self._store_current()
-        self._build(self.current)
+        self._build(self.current, ask=True)
+
+    # --- model / voice files of local engines (Whisper models, Piper voices, Kokoro), downloaded into the app folder
+    def check_downloads(self, ask: bool = False):
+        """Show what the selected engine still has to download; ask=True (the user just chose it) also offers to
+        download it now - once per engine and list of files."""
+        cls = REGISTRY[self.kind].get(self.current)
+        if cls is None or not cls.has_downloads or cls.missing_requirements():
+            self.dl_row.hide()
+            return
+        if self._dl_busy:
+            return
+        prov, langs, pid = self._provider_instance(), list(self.langs()), self.current
+
+        def done(need, err):
+            if self.current != pid or self._dl_busy:
+                return
+            if err:
+                self.dl_label.setText(f"⚠ Could not check the files to download: {err}")
+                self.dl_btn.setText("Download")
+                self.dl_btn.setEnabled(True)
+                self.dl_row.show()
+                return
+            if not need:
+                self.dl_row.hide()
+                return
+            what = describe_downloads(need)
+            self.dl_label.setText(f"Needs to download {what} into {prov.download_dir()}")
+            self.dl_btn.setText("Download")
+            self.dl_btn.setEnabled(True)
+            self.dl_row.show()
+            key = (pid, tuple(sorted(w for w, _s in need)))
+            if ask and key not in self._dl_asked and self.isVisible():
+                self._dl_asked.add(key)
+                if QMessageBox.question(self, "Download", f"{cls.name} needs {what}.\n\nDownload now into the app "
+                                        f"folder ({prov.download_dir()})? It is downloaded once and then works "
+                                        "without internet.") == QMessageBox.Yes:
+                    self.start_download()
+        run_async(lambda: prov.downloads_needed(langs), done)
+
+    def start_download(self):
+        cls = REGISTRY[self.kind].get(self.current)
+        if cls is None or self._dl_busy:
+            return
+        prov, langs, pid = self._provider_instance(), list(self.langs()), self.current
+        self._dl_busy = True
+        self.dl_btn.setEnabled(False)
+        self.dl_btn.setText("Downloading…")
+        self.dl_label.setText("Downloading… (this can take a few minutes)")
+        self.log.emit(f"{cls.name}: downloading into {prov.download_dir()}…")
+        relay = self._dl_relay
+
+        def done(_r, err):
+            self._dl_busy = False
+            if err:
+                self.log.emit(f"{cls.name}: download failed: {err}")
+                self.dl_label.setText(f"⚠ Download failed: {err}")
+                self.dl_btn.setText("Try again")
+                self.dl_btn.setEnabled(True)
+                return
+            self.log.emit(f"{cls.name}: download finished.")
+            if self.current == pid:
+                self.check_downloads()
+            self.downloaded.emit()
+        run_async(lambda: prov.download(langs, progress=lambda d, t: relay.progress.emit(d, t)), done)
+
+    def _dl_progress(self, done, total):
+        if self._dl_busy:
+            self.dl_label.setText(f"Downloading… {done / 1e6:,.0f} of {total / 1e6:,.0f} MB" if total
+                                  else f"Downloading… {done / 1e6:,.0f} MB")

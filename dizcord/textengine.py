@@ -48,9 +48,7 @@ class TextEngine:
             if inst is None:
                 inst = self._providers[(kind, pid)] = cls(settings, self.keys)
             else:
-                for f in cls.fields:
-                    if f.key in settings:
-                        inst.settings[f.key] = settings[f.key]
+                inst.update_settings({f.key: settings[f.key] for f in cls.fields if f.key in settings})
         return inst
 
     def translate_context(self, direction: str) -> TranslateContext:

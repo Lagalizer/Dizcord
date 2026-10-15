@@ -31,6 +31,7 @@ from .audio.capture import InputDeviceSource, LoopbackSource
 from .audio.player import OutputManager
 from .audio.vad import Segmenter
 from .providers import REGISTRY, ProviderError  # noqa: F401  (REGISTRY re-exported)
+from .providers.base import describe_downloads
 from .speech import Speaker, Utterance
 from .textengine import TextEngine, detect_text_language  # noqa: F401  (re-exported)
 
@@ -188,7 +189,7 @@ class Pipeline:
     def _on_audio(self, chunk: np.ndarray):
         if not self.running or self.segmenter is None:
             return
-        if self._passthrough_ok and self.engine.hear_originals:
+        if self._passthrough_ok and self.engine.hears_people():
             try:
                 self.engine.outputs.get(self.cfg["output_device"]).push_live(
                     chunk, self.source.samplerate, float(self.cfg.get("passthrough_volume", 1.0)))
@@ -472,6 +473,11 @@ class Engine(TextEngine):
         return " & ".join(names[:2])
 
     # --------------------------------------------------------------- hear the original voices
+    def hears_people(self) -> bool:
+        """The original voices of the call are heard: 'Hear people' is on, or the translations are not spoken
+        (text only - turning Discord down would leave you with silence)."""
+        return self.hear_originals or not self.profile["incoming"].get("speak", True)
+
     def toggle_hear(self):
         self.set_hear(not self.hear_originals)
 
@@ -524,7 +530,7 @@ class Engine(TextEngine):
                     if self.app_volume is None:
                         self.app_volume = winaudio.AppVolume(self.profile["input"].get("listen_app") or "discord",
                                                              DATA_DIR / "discord_volume.json")
-                    if self.hear_originals:
+                    if self.hears_people():
                         duck = float(self.profile["incoming"].get("duck_passthrough", 0.25))
                         factor = duck if duck < 0.99 and self.outputs.any_playing("incoming") else 1.0
                     else:
@@ -592,11 +598,14 @@ class Engine(TextEngine):
             if self.profile["translation"]["provider"] == "llm":
                 self.provider("llm")
             stt = self.provider("stt")
-            if stt.local:
-                self.emit_status(f"Loading {stt.name} model… (the first time it is downloaded - this can take "
-                                 "a few minutes)")
+            need = stt.downloads_needed([])
+            if need:
+                self.emit_status(f"Downloading {describe_downloads(need)} into {stt.download_dir()} - once, this "
+                                 "can take a few minutes…")
+            elif stt.local:
+                self.emit_status(f"Loading {stt.name} model…")
             stt.warmup()
-            threading.Thread(target=self.provider("tts").warmup, name="tts-warmup", daemon=True).start()
+            threading.Thread(target=self._prepare_tts, name="tts-warmup", daemon=True).start()
             if stt.local and self.profile["incoming"]["source_lang"] == L.AUTO:
                 self.emit_status("Tip: on the Live tab, choose the language they speak instead of Auto-detect - "
                                  "speech recognition on this PC gets about twice as fast.")
@@ -639,6 +648,21 @@ class Engine(TextEngine):
             log.exception("start failed")
             self.emit_error(f"Start failed: {e}")
             self.stop()
+
+    def _prepare_tts(self):
+        """Download the voices of the languages spoken (once), then load the voice engine."""
+        tts = self.provider("tts")
+        langs = [self.profile[d]["target_lang"] for d in ("incoming", "outgoing")
+                 if self.profile[d].get("enabled", True) and self.profile[d].get("speak", True)]
+        try:
+            need = tts.downloads_needed(langs)
+            if need:
+                self.emit_status(f"Downloading {describe_downloads(need)} into {tts.download_dir()} - once…")
+                tts.download(langs)
+                self.emit_status(f"{tts.name}: download finished.")
+            tts.warmup()
+        except Exception as e:  # noqa: BLE001
+            self.emit_error(f"{tts.name}: {e}")
 
     def _check_outgoing_device(self):
         if not self.profile["outgoing"].get("enabled", True):
@@ -690,6 +714,9 @@ class Engine(TextEngine):
         if hear != bool(self.profile.get("incoming", {}).get("hear_originals", False)):
             self.hear_originals = hear          # the "when Dizcord starts" box was just changed
             self.emit({"type": "hear", "on": hear})
+        if self.profile["incoming"].get("speak", True) and not profile["incoming"].get("speak", True) \
+                and "incoming" in self.speakers:
+            self.speakers["incoming"].cancel()  # text only from now on: stop what is being said
         self.profile = profile
         for d, pl in self.pipelines.items():
             if pl.segmenter:

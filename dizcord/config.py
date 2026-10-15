@@ -29,6 +29,32 @@ APP_STATE_FILE = DATA_DIR / "app_state.json"
 for _d in (DATA_DIR, PROFILES_DIR, TRANSCRIPTS_DIR, LOGS_DIR, MODELS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
+
+def app_path(value: str, default: str = "") -> Path:
+    """A file/folder setting as a real path. Relative paths are inside the app folder. Profiles used to store full
+    paths, so after the app folder was moved or copied they point into the models folder of the old copy: that
+    old default (same place inside models/) is this copy's default, and any other path into an old models folder
+    that doesn't exist points into this copy's models folder."""
+    p = Path(str(value or "").strip() or default)
+    if not p.is_absolute():
+        return ROOT / p
+    parts = [s.lower() for s in p.parts]
+    if "models" not in parts or p.is_relative_to(ROOT):
+        return p
+    tail = p.parts[len(parts) - parts[::-1].index("models"):]
+    if default and Path(default).is_relative_to(MODELS_DIR) \
+            and [s.lower() for s in tail] == [s.lower() for s in Path(default).relative_to(MODELS_DIR).parts]:
+        return Path(default)
+    return p if p.exists() else MODELS_DIR.joinpath(*tail)
+
+
+def portable_path(path: str) -> str:
+    """How a file/folder setting is saved: relative when it is inside the app folder, so the folder can move."""
+    try:
+        return str(Path(path).resolve().relative_to(ROOT.resolve()))
+    except (ValueError, OSError):
+        return path
+
 PROFILE_VERSION = 2       # 2: Discord-only listening, mic always on, faster end of sentence, app voice settings
 
 

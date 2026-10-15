@@ -15,6 +15,8 @@ from typing import Any
 
 import requests
 
+from ..config import app_path
+
 REGISTRY: dict[str, dict[str, type["Provider"]]] = {"stt": {}, "translate": {}, "llm": {}, "tts": {}}
 
 
@@ -58,10 +60,16 @@ class Provider:
     def __init__(self, settings: dict | None, keys):
         self.keys = keys
         self.settings = {f.key: f.default for f in self.fields}
-        for k, v in (settings or {}).items():
-            self.settings[k] = v
+        self.update_settings(settings or {})
         self.lock = threading.Lock()
         self.session = requests.Session()
+
+    def update_settings(self, settings: dict) -> None:
+        for k, v in settings.items():
+            self.settings[k] = v
+        for f in self.fields:
+            if f.kind == "path":
+                self.settings[f.key] = str(app_path(self.settings[f.key], f.default))
 
     # ---------------------------------------------------------------- helpers
     @classmethod
@@ -105,6 +113,20 @@ class Provider:
             raise ProviderError(f"{self.name}: HTTP {r.status_code}{hint.get(r.status_code, '')}: {body}")
         return r
 
+    # ---------------------------------------------------------------- model files (local engines)
+    has_downloads = False         # True: downloads_needed()/download() fetch model or voice files once
+
+    def downloads_needed(self, langs: list[str]) -> list[tuple[str, int]]:
+        """[(what, bytes)] still to download for these settings and languages - empty when ready."""
+        return []
+
+    def download(self, langs: list[str], progress=None, cancelled=lambda: False) -> None:
+        """Fetch what downloads_needed() lists into the app folder. progress(done_bytes, total_bytes or 0)."""
+
+    def download_dir(self) -> str:
+        from ..config import MODELS_DIR
+        return str(MODELS_DIR)
+
     def warmup(self) -> None:
         """Load models / open connections ahead of time (optional)."""
 
@@ -113,3 +135,9 @@ class Provider:
             self.session.close()
         except Exception:
             pass
+
+
+def describe_downloads(need: list[tuple[str, int]]) -> str:
+    """'Piper voice pt_PT-tugão-medium, Piper voice en_US-amy-medium (about 127 MB)'"""
+    total = sum(size for _what, size in need)
+    return ", ".join(what for what, _size in need) + (f" (about {total / 1e6:,.0f} MB)" if total else "")

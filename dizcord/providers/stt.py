@@ -53,6 +53,32 @@ class FasterWhisperSTT(STTProvider):
 
     _model = None
     _model_key = None
+    has_downloads = True
+    _SIZES_MB = {"tiny": 75, "base": 145, "small": 484, "medium": 1530, "large-v3-turbo": 1620, "turbo": 1620,
+                 "large-v3": 3090, "large": 3090, "distil-large-v3": 1510}
+
+    def _repo(self) -> str | None:
+        """The Hugging Face repo of the chosen model, None for a model folder on this PC."""
+        from faster_whisper.utils import _MODELS
+        name = str(self.s("model"))
+        return _MODELS.get(name, name if "/" in name and not os.path.isdir(name) else None)
+
+    def downloads_needed(self, langs):
+        repo = self._repo()
+        if repo is None:
+            return []
+        from huggingface_hub import try_to_load_from_cache
+        if isinstance(try_to_load_from_cache(repo, "model.bin", cache_dir=str(MODELS_DIR / "whisper")), str):
+            return []
+        return [(f"Whisper model '{self.s('model')}'", self._SIZES_MB.get(str(self.s("model")), 0) * 1_000_000)]
+
+    def download(self, langs, progress=None, cancelled=lambda: False):
+        from faster_whisper.utils import download_model
+        if self.downloads_needed(langs):
+            download_model(str(self.s("model")), cache_dir=str(MODELS_DIR / "whisper"))
+
+    def download_dir(self):
+        return str(MODELS_DIR / "whisper")
 
     def _load(self):
         from faster_whisper import WhisperModel
