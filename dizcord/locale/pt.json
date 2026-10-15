@@ -592,5 +592,9 @@
  "Add your Discord application's Client Secret (Output tab → Who is talking)": "Adicione o Client Secret do seu aplicativo do Discord (aba Saída → Quem está falando)",
  "Who is talking: following {0} ({1} people)": "Quem está falando: acompanhando {0} ({1} pessoas)",
  "Discord is not running (no RPC pipe)": "O Discord não está aberto (sem conexão RPC)",
- "The app hears only the Discord app, so it never hears its own voice, your game or your music, and it keeps listening while it talks. Keep 'Only the Discord app'. You hear only the translations: press F9 to also hear the people.": "O app ouve só o app do Discord, então nunca ouve a própria voz, o seu jogo ou a sua música, e continua ouvindo enquanto fala. Deixe 'Só o app do Discord'. Você ouve só as traduções: aperte F9 para ouvir também as pessoas."
+ "The app hears only the Discord app, so it never hears its own voice, your game or your music, and it keeps listening while it talks. Keep 'Only the Discord app'. You hear only the translations: press F9 to also hear the people.": "O app ouve só o app do Discord, então nunca ouve a própria voz, o seu jogo ou a sua música, e continua ouvindo enquanto fala. Deixe 'Só o app do Discord'. Você ouve só as traduções: aperte F9 para ouvir também as pessoas.",
+ "Speak the translations (off: only show the text of who is talking)": "Falar as traduções (desligado: só mostrar o texto de quem fala)",
+ "Off: the translations are only shown as text (subtitles window and Live tab) and you hear the people in the call with their own voices.": "Desligado: as traduções aparecem só como texto (janela de legendas e aba Ao vivo) e você ouve as pessoas da chamada com a voz delas.",
+ "Off: only show the text of who is talking (subtitles) - you hear their own voices": "Desligado: só mostrar o texto de quem fala (legendas) - você ouve a voz delas",
+ "Text only: the translations are shown in the subtitles window and you hear the people in the call with their own voices. Names: Output tab → Who is talking.": "Só texto: as traduções aparecem na janela de legendas e você ouve as pessoas da chamada com a voz delas. Nomes: aba Saída → Quem está falando."
 }

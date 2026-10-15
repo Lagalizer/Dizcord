@@ -612,5 +612,9 @@
  "Add your Discord application's Client Secret (Output tab → Who is talking)": "Додайте Client Secret вашого застосунку Discord (вкладка «Вихід» → Хто говорить)",
  "Who is talking: following {0} ({1} people)": "Хто говорить: стежу за {0} ({1} осіб)",
  "Discord is not running (no RPC pipe)": "Discord не відкрито (немає RPC-з'єднання)",
- "The app hears only the Discord app, so it never hears its own voice, your game or your music, and it keeps listening while it talks. Keep 'Only the Discord app'. You hear only the translations: press F9 to also hear the people.": "Застосунок чує лише застосунок Discord, тож ніколи не чує власний голос, вашу гру чи музику, і продовжує слухати, поки говорить. Залиште «Лише застосунок Discord». Ви чуєте лише переклади: натисніть F9, щоб чути й людей."
+ "The app hears only the Discord app, so it never hears its own voice, your game or your music, and it keeps listening while it talks. Keep 'Only the Discord app'. You hear only the translations: press F9 to also hear the people.": "Застосунок чує лише застосунок Discord, тож ніколи не чує власний голос, вашу гру чи музику, і продовжує слухати, поки говорить. Залиште «Лише застосунок Discord». Ви чуєте лише переклади: натисніть F9, щоб чути й людей.",
+ "Speak the translations (off: only show the text of who is talking)": "Озвучувати переклади (вимк.: лише показувати текст того, хто говорить)",
+ "Off: the translations are only shown as text (subtitles window and Live tab) and you hear the people in the call with their own voices.": "Вимк.: переклади лише показуються текстом (вікно субтитрів і вкладка «Ефір»), а людей у дзвінку ви чуєте їхніми власними голосами.",
+ "Off: only show the text of who is talking (subtitles) - you hear their own voices": "Вимк.: лише показувати текст того, хто говорить (субтитри) - ви чуєте їхні власні голоси",
+ "Text only: the translations are shown in the subtitles window and you hear the people in the call with their own voices. Names: Output tab → Who is talking.": "Лише текст: переклади показуються у вікні субтитрів, а людей у дзвінку ви чуєте їхніми власними голосами. Імена: вкладка «Вихід» → «Хто говорить»."
 }
